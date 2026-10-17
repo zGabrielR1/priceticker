@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Policies\ProductPolicy;
 use App\Policies\ProductSourcePolicy;
 use App\Policies\UserPolicy;
+use App\Services\FcmService;
 use App\Services\Helpers\NotificationsHelper;
 use App\Services\Helpers\QueueHelper;
 use App\Services\Helpers\SettingsHelper;
@@ -16,16 +17,18 @@ use Filament\Facades\Filament;
 use Filament\Navigation\MenuItem;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(FcmService::class);
     }
 
     public function boot(): void
@@ -35,6 +38,19 @@ class AppServiceProvider extends ServiceProvider
         $this->setConfigFromAppSettings();
         $this->registerAbout();
         $this->authorizePackages();
+        $this->registerRateLimiters();
+    }
+
+    protected function registerRateLimiters(): void
+    {
+        // Personal-use deployment: generous limits.
+        RateLimiter::for('api', function (\Illuminate\Http\Request $request) {
+            return Limit::perMinute(1000)->by($request->user()?->id ?: $request->ip());
+        });
+
+        RateLimiter::for('auth', function (\Illuminate\Http\Request $request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
     }
 
     protected function registerPolicies(): void

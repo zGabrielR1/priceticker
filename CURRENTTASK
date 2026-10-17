@@ -1,0 +1,9 @@
+CURRENTTASK: Phase 1 — Watch domain model for Brazilian deal intelligence.
+
+Objective: Introduce a "Watch" abstraction (PRODUCT, FAMILY, CATEGORY, BRAND, COUPON)
+with rules (max price, % below 30/90-day median, record-low only, store allowlist,
+notification channels, cooldown). Deliver migration, model, enum, Filament UI, tests.
+
+STATUS: Production hardening done (rate limits, FCM channel, FcmService singleton); generated client verified and wired.
+NEXT: Oracle Cloud retry or further hardening (request FormRequests, policies). Await approval.
+Reference: RECON.md §7-8, RUNBOOK.md.

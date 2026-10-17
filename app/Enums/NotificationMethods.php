@@ -4,6 +4,7 @@ namespace App\Enums;
 
 use App\Notifications\Channels\AppriseChannel;
 use App\Notifications\Channels\DiscordChannel;
+use App\Notifications\Channels\FcmChannel;
 use App\Notifications\Channels\GotifyChannel;
 use App\Notifications\Channels\NtfyChannel;
 use App\Notifications\Channels\TelegramChannel;
@@ -27,6 +28,8 @@ enum NotificationMethods: string
 
     case Ntfy = 'ntfy';
 
+    case Fcm = 'fcm';
+
     public function getChannel(): string
     {
         return match ($this) {
@@ -36,6 +39,7 @@ enum NotificationMethods: string
             self::Telegram => TelegramChannel::class,
             self::Discord => DiscordChannel::class,
             self::Ntfy => NtfyChannel::class,
+            self::Fcm => FcmChannel::class,
             default => $this->value,
         };
     }
@@ -44,6 +48,7 @@ enum NotificationMethods: string
     {
         return match ($this) {
             self::Database => false,
+            self::Fcm => false,
             default => true,
         };
     }
