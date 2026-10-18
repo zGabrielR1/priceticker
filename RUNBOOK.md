@@ -17,9 +17,10 @@
 - Fly: `fly launch --copy-config --now` (uses `fly.toml`, region gru); create volume `fly volumes create data`; set secrets via `fly secrets set`.
 - Oracle Cloud Always Free: deferred (not working yet).
 
-## Health
-- `GET /up` → 200 when app is healthy.
-- `GET /api/client-config` → capabilities + limits (auth required).
+## Web (Flutter)
+- Live demo: https://zgabrielr1.github.io/priceticker/
+- Rebuild with backend URL: `flutter build web --dart-define=API_BASE_URL=https://your-backend.example.com`
+- APK release: https://github.com/zGabrielR1/priceticker/releases/tag/v0.1.0
 
 ## Backups
 - MySQL: `mysqldump` daily (cron). Store media in `storage/app/public` — back up the volume.
