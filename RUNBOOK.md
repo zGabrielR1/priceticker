@@ -50,7 +50,9 @@ python scripts/render_deploy.py --yes
 ```
 The script merges the service environment by default (dashboard-only values
 survive); `--replace-env` is the deliberate reset. It triggers a deploy, watches
-it to `live`, and prints the build log if the build fails.
+it to `live`, and prints the build log if the build fails. A push to `main`
+also triggers a build when the repository is connected to Render; when it does
+not, the script is the reliable path and deploys the current branch head.
 
 ### Operating notes
 - Health check: `/up` (app-only; it does not fail when Postgres has a blip).

@@ -335,7 +335,9 @@ def configure(service_id: str, key: str) -> dict:
 
 
 def get_env_vars(service_id: str, key: str) -> list[dict[str, str]]:
-    answer = call(f"/services/{service_id}/env-vars", key)
+    # The endpoint defaults to 20 rows; without limit=100 a merge would drop
+    # every dashboard variable past the first page.
+    answer = call(f"/services/{service_id}/env-vars?limit=100", key)
     rows = answer.get("envVars") if isinstance(answer, dict) else answer
     out = []
     for row in rows or []:
