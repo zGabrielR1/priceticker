@@ -4,7 +4,6 @@ namespace Tests\Feature\Api\V1;
 
 use App\Models\Product;
 use App\Models\User;
-use App\Models\Watch;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -13,6 +12,7 @@ class MobileApiTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private string $token;
 
     protected function setUp(): void
