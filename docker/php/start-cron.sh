@@ -1,6 +1,8 @@
 #!/bin/sh
-set -e
+#
+# Install the application crontab, then run cron in the foreground so
+# supervisor can restart it if it ever exits.
+set -eu
 
-# Start cron
-/usr/bin/crontab /etc/cron.d/schedule-cron
-/usr/sbin/cron -f -L 1
+crontab /etc/cron.d/schedule-cron
+exec /usr/sbin/cron -f -L 1

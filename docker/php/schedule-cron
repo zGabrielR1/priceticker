@@ -1,2 +1,7 @@
-# * * * * * cd /app && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
-* * * * * cd /app && /usr/local/bin/php artisan schedule:run
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+# Every minute: let Laravel decide which scheduled task is due. The queue
+# worker in supervisor does the actual fetching, so this process stays short.
+* * * * * cd /app && /usr/local/bin/php artisan schedule:run >> /dev/stdout 2>&1

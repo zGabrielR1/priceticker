@@ -18,19 +18,39 @@ Route::get('/client-config', ClientConfigController::class)
     ->middleware(['auth:sanctum', 'ability:'.ApiAbility::ClientConfigRead->value, 'throttle:api'])
     ->name('api.client-config');
 
-// Versioned mobile API (v1)
+// Versioned mobile API (v1). Every authenticated route names the ability it
+// needs: a token minted for one client must not be able to drive another
+// surface. Issued tokens carry '*' today, so the mobile app keeps working.
 Route::prefix('v1')->group(function () {
     Route::post('/auth/token', [\App\Http\Controllers\Api\V1\AuthController::class, 'token'])
         ->middleware('throttle:auth')->name('api.v1.auth.token');
     Route::post('/auth/revoke', [\App\Http\Controllers\Api\V1\AuthController::class, 'revoke'])
-        ->middleware('auth:sanctum')->name('api.v1.auth.revoke');
+        ->middleware(['auth:sanctum', 'ability:'.ApiAbility::AccountManage->value])
+        ->name('api.v1.auth.revoke');
 
     Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
-        Route::apiResource('watches', \App\Http\Controllers\Api\V1\WatchController::class);
-        Route::post('/devices', [\App\Http\Controllers\Api\V1\DeviceController::class, 'store'])->name('api.v1.devices.store');
-        Route::delete('/devices/{device}', [\App\Http\Controllers\Api\V1\DeviceController::class, 'destroy'])->name('api.v1.devices.destroy');
-        Route::get('/products/{product}/prices', [\App\Http\Controllers\Api\V1\PriceHistoryController::class, 'index'])->name('api.v1.products.prices');
-        Route::get('/alerts', [\App\Http\Controllers\Api\V1\AlertController::class, 'index'])->name('api.v1.alerts.index');
-        Route::post('/alerts/{id}/read', [\App\Http\Controllers\Api\V1\AlertController::class, 'markRead'])->name('api.v1.alerts.read');
+        Route::get('/watches', [\App\Http\Controllers\Api\V1\WatchController::class, 'index'])
+            ->middleware('ability:'.ApiAbility::WatchesRead->value)->name('watches.index');
+        Route::post('/watches', [\App\Http\Controllers\Api\V1\WatchController::class, 'store'])
+            ->middleware('ability:'.ApiAbility::WatchesWrite->value)->name('watches.store');
+        Route::get('/watches/{watch}', [\App\Http\Controllers\Api\V1\WatchController::class, 'show'])
+            ->middleware('ability:'.ApiAbility::WatchesRead->value)->name('watches.show');
+        Route::put('/watches/{watch}', [\App\Http\Controllers\Api\V1\WatchController::class, 'update'])
+            ->middleware('ability:'.ApiAbility::WatchesWrite->value)->name('watches.update');
+        Route::delete('/watches/{watch}', [\App\Http\Controllers\Api\V1\WatchController::class, 'destroy'])
+            ->middleware('ability:'.ApiAbility::WatchesWrite->value)->name('watches.destroy');
+
+        Route::post('/devices', [\App\Http\Controllers\Api\V1\DeviceController::class, 'store'])
+            ->middleware('ability:'.ApiAbility::DevicesWrite->value)->name('api.v1.devices.store');
+        Route::delete('/devices/{device}', [\App\Http\Controllers\Api\V1\DeviceController::class, 'destroy'])
+            ->middleware('ability:'.ApiAbility::DevicesWrite->value)->name('api.v1.devices.destroy');
+
+        Route::get('/products/{product}/prices', [\App\Http\Controllers\Api\V1\PriceHistoryController::class, 'index'])
+            ->middleware('ability:'.ApiAbility::PricesRead->value)->name('api.v1.products.prices');
+
+        Route::get('/alerts', [\App\Http\Controllers\Api\V1\AlertController::class, 'index'])
+            ->middleware('ability:'.ApiAbility::AlertsRead->value)->name('api.v1.alerts.index');
+        Route::post('/alerts/{id}/read', [\App\Http\Controllers\Api\V1\AlertController::class, 'markRead'])
+            ->middleware('ability:'.ApiAbility::AlertsWrite->value)->name('api.v1.alerts.read');
     });
 });

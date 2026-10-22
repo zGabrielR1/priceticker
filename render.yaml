@@ -1,58 +1,99 @@
-# Render — blueprint for a container service.
+# Render blueprint for priceticker.
 #
-# Stamp it:  python -m foundry.deploy render --set SERVICE=priceticker \
-#                --health /up --port 8080 --out .
+# The service builds from the Dockerfile in this repository, so a deploy never
+# depends on a local build. State lives in Postgres (Supabase in the current
+# setup), not on Render's ephemeral disk, which is why the free plan is safe.
 #
-# Render builds the image itself from the Dockerfile in the repository, so
-# nothing has to be built or committed from a laptop first. Render injects
-# $PORT; do not hard-code the listen port here, read it in the app.
+# To create/update the service without a browser:
+#   python scripts/render_deploy.py --check
+#   python scripts/render_deploy.py --yes
 #
-# On the free plan there is no persistent disk: a service that keeps state on
-# local disk (a JSONL ledger, uploaded files) loses it when the instance is
-# redeployed or spun down after idle. Uncomment the `disk:` block on a paid
-# plan to keep it.
+# Secrets are never committed: `sync: false` means "set this in the Render
+# dashboard/API". scripts/render_deploy.py carries the real values from the
+# gitignored .env.supabase / .env.resend files at deploy time.
 services:
   - type: web
     name: priceticker
     runtime: docker
     dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: free
-    # one process, one writer: a JSONL ledger under a single lock, or SQLite,
-    # cannot survive two instances behind the same disk
+    region: oregon
+    branch: main
+    # One process, one writer. The queue worker and cron run inside the same
+    # container (supervisor), so two instances would duplicate scheduled work.
     numInstances: 1
     healthCheckPath: /up
+    autoDeploy: true
     envVars:
-      # HOST must be 0.0.0.0: Render routes to $PORT on the container's
-      # external interface, so a server bound to 127.0.0.1 answers
-      # "connection refused" forever
-      - key: HOST
-        value: 0.0.0.0
-      # secrets are NOT set here: a blueprint is committed. They reach the
-      # service through the Render API (`sync: false` marks a placeholder), so
-      # nothing sensitive ever lives in the repository.
-      - key: RESEND_API_KEY
+      - key: APP_NAME
+        value: PriceTicker
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        value: https://priceticker.onrender.com
+      - key: APP_TIMEZONE
+        value: America/Sao_Paulo
+      - key: APP_LOCALE
+        value: en
+      - key: APP_CURRENCY_LOCALE
+        value: pt_BR
+      # Generate once on first create and keep it stable across deploys;
+      # changing it invalidates sessions and encrypted values.
+      - key: APP_KEY
+        generateValue: true
+
+      # First-boot admin. Set both values in the dashboard (or through the
+      # deploy script) before the first deploy; buddy:init-db only creates the
+      # user when the schema is brand new.
+      - key: APP_USER_NAME
+        value: Admin
+      - key: APP_USER_EMAIL
         sync: false
-      - key: MAIL_FROM
+      - key: APP_USER_PASSWORD
         sync: false
-      # Turnstile (foundry.turnstile): the secret is a real secret, the site
-      # key and the hostname allowlist are public but travel with it. A deploy
-      # without them simply does not gate the surface.
-      - key: TURNSTILE_SECRET_KEY
-        sync: false
-      - key: TURNSTILE_SITE_KEY
-        sync: false
-      - key: TURNSTILE_HOSTNAMES
-        sync: false
-      # Supabase Postgres (decision 0049 pattern): the backend's disk. Only
-      # DATABASE_URL is needed at runtime — the service role key stays on the
-      # laptop for migrations, and the anon key is unused when the storefront
-      # talks to the backend instead of Supabase directly. A deploy without it
-      # keeps files (or SQLite); with it, the Postgres seam arms itself.
+      - key: DEFAULT_STORES_COUNTRY
+        value: brazil
+
+      # Postgres. DATABASE_URL is the only database secret; the schema keeps
+      # priceticker's tables out of the `public` schema of a shared project.
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_SEARCH_PATH
+        value: priceticker
+      - key: DB_SSLMODE
+        value: require
       - key: DATABASE_URL
         sync: false
-      - key: SUPABASE_URL
+
+      - key: SESSION_DRIVER
+        value: database
+      - key: SESSION_SECURE_COOKIE
+        value: true
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: LOG_CHANNEL
+        value: stack
+      - key: LOG_STACK
+        value: single
+      - key: LOG_LEVEL
+        value: info
+      - key: TRUSTED_PROXIES
+        value: "*"
+      - key: RUN_PRICE_CACHE_ON_BOOT
+        value: 0
+
+      # Resend is optional: without RESEND_API_KEY the mailer falls back to
+      # the log driver and the app still works.
+      - key: MAIL_MAILER
+        value: resend
+      - key: RESEND_API_KEY
         sync: false
-    # disk:
-    #   name: priceticker-data
-    #   mountPath: /data
-    #   sizeGB: 1
+      - key: MAIL_FROM_ADDRESS
+        value: onboarding@resend.dev
+      - key: MAIL_FROM_NAME
+        value: PriceTicker

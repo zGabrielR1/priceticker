@@ -30,9 +30,11 @@ class InitDatabase extends Command
     {
         try {
             DB::connection()->getPdo();
+            $this->ensureSchema();
             $hasTables = Schema::hasTable('migrations');
         } catch (Exception $e) {
             $this->getOutput()->error('Database connection failed, check environment settings');
+            $this->getOutput()->error($e->getMessage());
 
             return self::FAILURE;
         }
@@ -75,6 +77,36 @@ class InitDatabase extends Command
         $this->getOutput()->success('Database init complete');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Postgres needs the schema to exist before the first migration. Managed
+     * Postgres (Supabase, Neon, Render) usually only ships `public`, and a
+     * shared project may already use it, so a dedicated schema is the safe
+     * way to keep two applications in one database. Laravel sets the
+     * connection's search_path before this runs; creating the schema is the
+     * one thing it cannot do for itself.
+     */
+    protected function ensureSchema(): void
+    {
+        $connection = DB::connection();
+
+        if ($connection->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $schema = (string) ($connection->getConfig('search_path') ?: 'public');
+
+        // A search_path can be a list ("app,public"); only the first entry is
+        // the schema this application owns.
+        $schema = trim(explode(',', $schema)[0]);
+
+        if ($schema === '' || $schema === 'public') {
+            return;
+        }
+
+        $quoted = '"'.str_replace('"', '""', $schema).'"';
+        $connection->statement("CREATE SCHEMA IF NOT EXISTS {$quoted}");
     }
 
     /**
