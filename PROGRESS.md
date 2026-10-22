@@ -53,3 +53,11 @@ Verification: `pest --filter 'MobileApiTest|FcmServiceTest'` → 11 passed. `php
 - `flutter analyze` → no issues; `flutter test` → 1 passed; `flutter build apk --debug` → APK built successfully.
 - OpenAPI spec exported (`api.json` via `scramble:export`); generation script `tools/generate_client.sh`.
 - Generated dart-dio client (`mobile/packages/priceticker_api`) cleaned up and verified (analyze clean, pub get, APK build).
+
+## Phase 7 — Render deployment (live)
+- Service `srv-dbcllqqvcj2c73f2rklg` (Oregon, free plan, Docker) builds from `main` and is live at <https://priceticker.onrender.com>.
+- State: Supabase Postgres, dedicated `priceticker` schema (`DATABASE_URL` + `DB_SEARCH_PATH`), not the shared `public` schema.
+- Verified after first boot: `/up` 200, `/` 302 to `/admin`, `/admin/login` 200, API token login 200, `/api/user` 200, `/api/v1/watches` 200.
+- Verified schema: 23 tables, 39 migrations, 7 Brazilian stores, 1 admin, 10 settings rows.
+- Runtime: Apache on Render's `$PORT`, cron + queue worker under supervisor; entrypoint creates the schema, migrates, applies settings migrations and warms caches.
+- Deploy tooling: `scripts/render_deploy.py` now unwraps Render's `{"service": …}` create response, cancels superseded builds, and keeps all 29 env vars. First-boot logs no longer print the admin password.

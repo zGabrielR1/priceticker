@@ -43,22 +43,23 @@ API = "https://api.render.com/v1"
 SERVICE = {
     "name": "priceticker",
     "type": "web_service",
-    "runtime": "docker",
-    "plan": "free",
-    "region": "oregon",
     "branch": "main",
     "healthCheckPath": "/up",
-    "numInstances": 1,
-    "autoDeploy": "yes",
+    "plan": "free",
+    "region": "oregon",
 }
 
-# Render switches builder on `env`, not on `runtime`; both Dockerfile paths
-# have to travel with it. This is the failure mode decision 0039 documented
-# for the operator: the service object said "docker" while Render ran pip.
+# Create and PATCH put Docker settings under serviceDetails.envSpecificDetails
+# (the API rejects a non-static service without serviceDetails). `env` is the
+# deprecated alias for `runtime`; both are sent on create so older and newer
+# API versions agree on the builder.
 DOCKER_BUILD = {
     "env": "docker",
-    "dockerContext": ".",
-    "dockerfilePath": "./Dockerfile",
+    "runtime": "docker",
+    "envSpecificDetails": {
+        "dockerContext": ".",
+        "dockerfilePath": "./Dockerfile",
+    },
 }
 
 BASE_ENV = {
@@ -325,14 +326,12 @@ def configure(service_id: str, key: str) -> dict:
     body = {
         "serviceDetails": {
             **DOCKER_BUILD,
-            "runtime": SERVICE["runtime"],
             "plan": SERVICE["plan"],
             "healthCheckPath": SERVICE["healthCheckPath"],
-            "numInstances": SERVICE["numInstances"],
         },
     }
     call(f"/services/{service_id}", key, body, "PATCH")
-    return call(f"/services/{service_id}", key)
+    return entity(call(f"/services/{service_id}", key), "service")
 
 
 def get_env_vars(service_id: str, key: str) -> list[dict[str, str]]:
@@ -361,13 +360,33 @@ def merge_env_vars(current: list[dict[str, str]],
 
 
 def create_service(key: str, repo: str, owner: dict) -> dict:
-    body = {**SERVICE, **DOCKER_BUILD, "repo": repo, "ownerID": owner["id"]}
+    body = {
+        "type": SERVICE["type"],
+        "name": SERVICE["name"],
+        "ownerId": owner["id"],
+        "repo": repo,
+        "branch": SERVICE["branch"],
+        "autoDeployTrigger": "commit",
+        "serviceDetails": {
+            **DOCKER_BUILD,
+            "plan": SERVICE["plan"],
+            "region": SERVICE["region"],
+            "healthCheckPath": SERVICE["healthCheckPath"],
+            "numInstances": 1,
+        },
+    }
     try:
-        return call("/services", key, body, "POST")
+        answer = call("/services", key, body, "POST")
     except RenderError as error:
         raise RenderError(
             f"{error}\n  The repository must be public or connected to this "
             "Render account, and the branch must exist.") from error
+
+    # POST /services answers with {"service": {...}, "deployId": "..."}.
+    service = entity(answer, "service")
+    if not service.get("id"):
+        raise RenderError(f"service created but the answer had no id: {answer}")
+    return service
 
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -406,6 +425,26 @@ def print_build_failure(service_id: str, key: str, since: str) -> None:
     print("the build said:")
     for line in lines[-30:]:
         print("   ", line.encode("ascii", "replace").decode()[:220])
+
+
+ACTIVE_DEPLOY_STATES = ("created", "pre_deploy_in_progress",
+                        "build_in_progress", "update_in_progress")
+
+
+def cancel_active_deploys(service_id: str, key: str) -> None:
+    """Stop builds Render started before the environment was in place."""
+    try:
+        page = call(f"/services/{service_id}/deploys?limit=10", key)
+    except RenderError:
+        return
+    for item in entities(page, "deploy"):
+        if item.get("status") in ACTIVE_DEPLOY_STATES and item.get("id"):
+            try:
+                call(f"/services/{service_id}/deploys/{item['id']}/cancel",
+                     key, None, "POST")
+                print(f"canceled early deploy {item['id']}")
+            except RenderError:
+                pass
 
 
 def deploy(service_id: str, key: str) -> str:
@@ -477,6 +516,7 @@ def run(key: str, repo: str, force: bool, replace_env: bool) -> int:
 
     print(f"service: {service.get('name')} [{service_id}]")
     print(f"url:     {service.get('serviceDetails', {}).get('url')}")
+    cancel_active_deploys(service_id, key)
     outcome = deploy(service_id, key)
     print("deploy:", outcome)
     if outcome != "live":

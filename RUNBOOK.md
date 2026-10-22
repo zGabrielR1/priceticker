@@ -56,8 +56,14 @@ it to `live`, and prints the build log if the build fails.
 - Health check: `/up` (app-only; it does not fail when Postgres has a blip).
 - One instance only: Apache, cron and the queue worker share one container, so
   two instances would run the scheduler twice.
-- First boot applies all migrations, creates the Brazilian stores and the
-  admin user. Later boots only apply new migrations.
+- First boot creates the schema, applies regular **and** settings migrations,
+  creates the Brazilian stores and the admin user. Later boots only apply new
+  migrations; the admin is never re-seeded over an existing account.
+- Render's free web services spin down after about 15 minutes without traffic.
+  Cron and the queue worker stop with the instance and resume on the next
+  request, which then pays a 30–60s cold start. If scheduled scraping must run
+  continuously, use a paid instance or an external uptime pinger; do not add a
+  second instance, or the scheduler will run twice.
 - `APP_KEY`, `DATABASE_URL` and the admin password are Render secrets; they are
   never in `render.yaml` (which uses `sync: false` placeholders).
 - The entrypoint honours Render's `$PORT`; do not hard-code 8080 in the
