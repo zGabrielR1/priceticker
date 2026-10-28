@@ -4,6 +4,7 @@ namespace App\Services;
 
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Process;
 
 /** A single-use Chromium profile keeps retailer sessions isolated. */
@@ -29,8 +30,20 @@ class BrowserPageRenderer
                 '--virtual-time-budget='.max(0, min($wait, 5000)),
                 '--dump-dom', $url,
             ]);
+            // Supervisor runs this as www-data. Chromium's crash reporter must
+            // not inherit root's unwritable home/config directories.
+            $process->setEnv([
+                'HOME' => $profile,
+                'XDG_CONFIG_HOME' => $profile.'/config',
+                'XDG_CACHE_HOME' => $profile.'/cache',
+            ]);
             $process->setTimeout(max(1, min($timeout, 45)));
-            $process->run();
+            try {
+                $process->run();
+            } catch (ProcessSignaledException $error) {
+                error_log('Chromium signal '.$error->getSignal().': '.substr($process->getErrorOutput(), -3000));
+                throw new RuntimeException('The browser process stopped unexpectedly.', previous: $error);
+            }
 
             if (! $process->isSuccessful() || trim($process->getOutput()) === '') {
                 throw new RuntimeException('The browser could not load the product page.');

@@ -19,6 +19,7 @@ class BrowserPageRendererTest extends TestCase
     public function test_rendering_bounds_runtime_and_cleans_session_directory(): void
     {
         $process = Mockery::mock(Process::class);
+        $process->shouldReceive('setEnv')->once()->with(Mockery::on(fn (array $env): bool => is_dir($env['HOME']) && str_starts_with($env['XDG_CONFIG_HOME'], $env['HOME'])));
         $process->shouldReceive('setTimeout')->once()->with(45);
         $process->shouldReceive('run')->once();
         $process->shouldReceive('isSuccessful')->andReturn(true);
@@ -34,6 +35,7 @@ class BrowserPageRendererTest extends TestCase
     public function test_failed_browser_process_does_not_leave_a_session(): void
     {
         $process = Mockery::mock(Process::class);
+        $process->shouldReceive('setEnv')->once()->with(Mockery::on(fn (array $env): bool => is_dir($env['HOME']) && str_starts_with($env['XDG_CONFIG_HOME'], $env['HOME'])));
         $process->shouldReceive('setTimeout')->once()->with(30);
         $process->shouldReceive('run')->once();
         $process->shouldReceive('isSuccessful')->andReturn(false);
