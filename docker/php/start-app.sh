@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Container entrypoint: make the writable paths, wait for the database, apply
-# migrations, warm the caches and hand over to supervisor (Apache + cron +
+# migrations, warm the caches and hand over to supervisor (Apache + scheduler +
 # queue worker).
 #
 # Everything here is idempotent: a redeploy runs the same steps against a
@@ -16,7 +16,7 @@ cd /app
 # the image is only a build-time fallback (and holds a throwaway APP_KEY), so
 # never overwrite an existing file and never print the environment.
 if [ ! -s .env ]; then
-    cp .env.example .env
+    cp envs/.env.example .env
 fi
 
 if [ -z "${APP_KEY:-}" ] && ! grep -q '^APP_KEY=base64:' .env 2>/dev/null; then

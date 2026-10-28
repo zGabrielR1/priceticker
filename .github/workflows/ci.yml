@@ -37,7 +37,7 @@ jobs:
       -
         name: Prepare Laravel Application
         run: |
-          cp .env.ci .env
+          cp envs/.env.ci .env
           php artisan key:generate
       -
         name: Check coding standards

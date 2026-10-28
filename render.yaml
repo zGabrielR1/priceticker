@@ -10,7 +10,7 @@
 #
 # Secrets are never committed: `sync: false` means "set this in the Render
 # dashboard/API". scripts/render_deploy.py carries the real values from the
-# gitignored .env.supabase / .env.resend files at deploy time.
+# gitignored envs/.env.supabase / envs/.env.resend files at deploy time.
 services:
   - type: web
     name: priceticker

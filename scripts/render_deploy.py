@@ -12,12 +12,12 @@ contract as `render.yaml`:
 
 Credentials and runtime secrets are read from gitignored dotenv files:
 
-    .env.render     RENDER_API_KEY, RENDER_REPO, APP_KEY, APP_USER_*
-    .env.supabase   DATABASE_URL
-    .env.resend     RESEND_API_KEY, MAIL_FROM
+    envs/.env.render     RENDER_API_KEY, RENDER_REPO, APP_KEY, APP_USER_*
+    envs/.env.supabase   DATABASE_URL
+    envs/.env.resend     RESEND_API_KEY, MAIL_FROM
 
 Nothing here is committed. If APP_KEY or the admin password is missing, the
-script generates it and writes it to `.env.render` (mode 0600), so the next
+script generates it and writes it to `envs/.env.render` (mode 0600), so the next
 deploy uses the same value.
 """
 
@@ -89,7 +89,7 @@ BASE_ENV = {
 }
 
 REQUIRED = ["Dockerfile", ".dockerignore", "render.yaml", "composer.lock",
-            "package-lock.json", "routes/web.php",
+            "package-lock.json", "envs/.env.example", "routes/web.php",
             "docker/php/apache-vhost.conf", "docker/php/start-app.sh"]
 
 MUST_REACH_IMAGE = ["app", "bootstrap", "config", "database", "docker",
@@ -112,6 +112,7 @@ def env_pairs(path: Path) -> dict[str, str]:
 
 
 def write_env(path: Path, values: dict[str, str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(f"{name}={value}\n" for name, value in values.items()),
                     encoding="utf-8")
     path.chmod(0o600)
@@ -119,7 +120,7 @@ def write_env(path: Path, values: dict[str, str]) -> None:
 
 def ensure_local_secrets() -> None:
     """Generate the two values that must be stable across deploys."""
-    path = ROOT / ".env.render"
+    path = ROOT / "envs/.env.render"
     values = env_pairs(path)
 
     changed = False
@@ -142,7 +143,7 @@ def ensure_local_secrets() -> None:
 def read_key() -> str:
     candidates = [
         os.environ.get("RENDER_API_KEY", "").strip(),
-        env_pairs(ROOT / ".env.render").get("RENDER_API_KEY", ""),
+        env_pairs(ROOT / "envs/.env.render").get("RENDER_API_KEY", ""),
     ]
     home = Path.home() / ".render_api_key"
     if home.is_file():
@@ -150,7 +151,7 @@ def read_key() -> str:
     for value in candidates:
         if value:
             return value
-    raise SystemExit("no Render API key: set RENDER_API_KEY or add it to .env.render")
+    raise SystemExit("no Render API key: set RENDER_API_KEY or add it to envs/.env.render")
 
 
 def read_repo() -> str:
@@ -166,23 +167,23 @@ def read_repo() -> str:
     except (OSError, subprocess.SubprocessError):
         pass
     return (os.environ.get("RENDER_REPO", "").strip()
-            or env_pairs(ROOT / ".env.render").get("RENDER_REPO", ""))
+            or env_pairs(ROOT / "envs/.env.render").get("RENDER_REPO", ""))
 
 
 def runtime_env() -> list[dict[str, str]]:
     values = dict(BASE_ENV)
-    render = env_pairs(ROOT / ".env.render")
+    render = env_pairs(ROOT / "envs/.env.render")
     values.update({name: value for name, value in render.items()
                    if not name.startswith("RENDER_") and value})
 
-    database = env_pairs(ROOT / ".env.supabase").get("DATABASE_URL", "")
+    database = env_pairs(ROOT / "envs/.env.supabase").get("DATABASE_URL", "")
     if not database:
         raise SystemExit(
-            "no DATABASE_URL: add it to .env.supabase. Render's free plan has "
+            "no DATABASE_URL: add it to envs/.env.supabase. Render's free plan has "
             "no persistent disk, so SQLite would lose every watch on redeploy.")
     values["DATABASE_URL"] = database
 
-    mail = env_pairs(ROOT / ".env.resend")
+    mail = env_pairs(ROOT / "envs/.env.resend")
     if mail.get("RESEND_API_KEY"):
         values["RESEND_API_KEY"] = mail["RESEND_API_KEY"]
         values["MAIL_MAILER"] = "resend"
@@ -216,10 +217,10 @@ def check_tree() -> int:
         if needle not in dockerfile:
             problems.append(f"Dockerfile is missing {needle}")
 
-    if not (ROOT / ".env.supabase").is_file():
-        problems.append("missing .env.supabase (DATABASE_URL)")
-    if not (ROOT / ".env.render").is_file():
-        problems.append("missing .env.render (RENDER_API_KEY / APP_KEY)")
+    if not (ROOT / "envs/.env.supabase").is_file():
+        problems.append("missing envs/.env.supabase (DATABASE_URL)")
+    if not (ROOT / "envs/.env.render").is_file():
+        problems.append("missing envs/.env.render (RENDER_API_KEY / APP_KEY)")
 
     print(f"render preflight: {len(REQUIRED)} files checked, "
           f"{len(problems)} problem(s)")
@@ -507,10 +508,8 @@ def run(key: str, repo: str, force: bool, replace_env: bool) -> int:
         set_env_vars(service_id, key, wanted)
         print(f"env:     replaced with {len(wanted)} variable(s)")
     else:
-        try:
-            current = get_env_vars(service_id, key)
-        except RenderError:
-            current = []
+        # A failed read must never turn a merge into a destructive replacement.
+        current = get_env_vars(service_id, key)
         merged = merge_env_vars(current, wanted)
         set_env_vars(service_id, key, merged)
         print(f"env:     {len(merged)} variable(s), "

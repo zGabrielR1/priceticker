@@ -2,7 +2,7 @@
 
 ## Local development
 - PHP 8.4 + MySQL 8.2 (podman): see Phase 0/1 verification commands in PROGRESS.md.
-- `cp .env.example-dev .env && php artisan key:generate`
+- `cp envs/.env.example-dev .env && php artisan key:generate`
 - `php artisan migrate --force && php artisan buddy:create-stores brazil`
 - `npm install && npm run build`
 - `php artisan serve` (or `docker compose up`)
@@ -29,20 +29,20 @@ ephemeral disk does not lose watches or price history.
    schemas. `DB_SEARCH_PATH=priceticker` keeps its tables out of the shared
    project's `public` schema.
 2. Copy the deploy credentials into gitignored files:
-   - `.env.render`: `RENDER_API_KEY`, `APP_KEY`, `APP_USER_EMAIL`,
+   - `envs/.env.render`: `RENDER_API_KEY`, `APP_KEY`, `APP_USER_EMAIL`,
      `APP_USER_PASSWORD`
-   - `.env.supabase`: `DATABASE_URL` (Supabase **session pooler**, port 5432)
-   - `.env.resend`: `RESEND_API_KEY`, `MAIL_FROM`
+   - `envs/.env.supabase`: `DATABASE_URL` (Supabase **session pooler**, port 5432)
+   - `envs/.env.resend`: `RESEND_API_KEY`, `MAIL_FROM`
    Generate `APP_KEY` once and keep it forever: changing it invalidates
    sessions and encrypted values. The deploy script generates a missing key
-   and admin password into `.env.render` (mode 0600).
+   and admin password into `envs/.env.render` (mode 0600).
 3. Deploy:
    ```shell
    python scripts/render_deploy.py --check
    python scripts/render_deploy.py --yes
    ```
    Live URL: <https://priceticker.onrender.com>. Admin: `/admin`, with the
-   email/password from `.env.render`.
+   email/password from `envs/.env.render`.
 
 ### Every later deploy
 ```shell
@@ -56,16 +56,23 @@ not, the script is the reliable path and deploys the current branch head.
 
 ### Operating notes
 - Health check: `/up` (app-only; it does not fail when Postgres has a blip).
-- One instance only: Apache, cron and the queue worker share one container, so
+- One instance only: Apache, the scheduler and the queue worker share one container, so
   two instances would run the scheduler twice.
 - First boot creates the schema, applies regular **and** settings migrations,
   creates the Brazilian stores and the admin user. Later boots only apply new
   migrations; the admin is never re-seeded over an existing account.
-- Render's free web services spin down after about 15 minutes without traffic.
-  Cron and the queue worker stop with the instance and resume on the next
-  request, which then pays a 30–60s cold start. If scheduled scraping must run
-  continuously, use a paid instance or an external uptime pinger; do not add a
-  second instance, or the scheduler will run twice.
+- `.github/workflows/uptime.yml` checks `/up` and `/admin/login` every five
+  minutes using free GitHub Actions minutes for this public repository. This
+  keeps Render active under normal operation and detects database-backed login
+  failures. Failed runs appear in Actions and GitHub's notification system.
+  Render grants 750 instance hours per workspace/month; one service uses at
+  most 744 hours, so other free services sharing that workspace reduce coverage.
+  GitHub schedules can be delayed or dropped and are disabled after 60 days
+  without repository activity. This is best-effort continuous operation, not
+  guaranteed uptime. Check the workflow remains enabled during maintenance.
+- Supervisor runs `schedule:work` and the queue worker with the platform's
+  environment. Debian cron clears injected variables and should not be used
+  for this hosted build.
 - `APP_KEY`, `DATABASE_URL` and the admin password are Render secrets; they are
   never in `render.yaml` (which uses `sync: false` placeholders).
 - The entrypoint honours Render's `$PORT`; do not hard-code 8080 in the

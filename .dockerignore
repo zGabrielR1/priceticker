@@ -1,6 +1,6 @@
 .env
 .env.*
-!.env.example
+!envs/.env.example
 storage
 public/build
 public/hot
@@ -16,3 +16,7 @@ tests
 tools
 .playwright-mcp
 scratch
+
+# Deployment credentials must never enter any image layer.
+envs/*
+!envs/.env.example

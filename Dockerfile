@@ -30,7 +30,7 @@ COPY vite.config.js postcss.config.js tailwind.config.js ./
 RUN npm run build
 
 
-FROM php:8.4-apache-bookworm
+FROM php:8.4.27-apache-bookworm
 
 ARG APP_VERSION=production
 
@@ -63,7 +63,7 @@ COPY . /app
 # generates APP_KEY on first boot if the platform did not provide one, so no
 # key is baked into the image.
 RUN mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache/data storage/framework/testing storage/logs storage/app/public bootstrap/cache \
-    && php -r "file_exists('.env') || copy('.env.example', '.env');"
+    && php -r "file_exists('.env') || copy('envs/.env.example', '.env');"
 
 # Install PHP deps
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress --prefer-dist
