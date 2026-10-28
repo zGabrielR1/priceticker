@@ -53,8 +53,9 @@ RUN apt-get update && apt-get upgrade -y \
     && docker-php-ext-install exif pcntl posix mysqli pdo pdo_mysql pdo_pgsql zip intl \
     && a2enmod rewrite headers
 
-# Composer
-COPY --from=composer/composer:2-bin /composer /usr/bin/composer
+# Reuse the Composer image already resolved for dependencies. A separate
+# composer/composer:2-bin pull adds a redundant registry dependency.
+COPY --from=vendor /usr/bin/composer /usr/bin/composer
 
 # App source
 COPY . /app
