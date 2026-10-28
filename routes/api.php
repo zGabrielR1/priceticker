@@ -54,3 +54,11 @@ Route::prefix('v1')->group(function () {
             ->middleware('ability:'.ApiAbility::AlertsWrite->value)->name('api.v1.alerts.read');
     });
 });
+
+// Automation uses source-bound HMAC, not a mobile token. No URLs are fetched here.
+Route::post('/v1/discovery/{source}/events', [\App\Http\Controllers\Api\V1\DiscoveryController::class, 'ingest'])
+    ->middleware('throttle:api')->name('api.v1.discovery.ingest');
+Route::get('/v1/deals', [\App\Http\Controllers\Api\V1\DiscoveryController::class, 'index'])
+    ->middleware(['auth:sanctum', 'ability:'.ApiAbility::WatchesRead->value, 'throttle:api'])->name('api.v1.deals');
+Route::get('/v1/discovery/sources', [\App\Http\Controllers\Api\V1\DiscoveryController::class, 'sources'])
+    ->middleware(['auth:sanctum', 'ability:'.ApiAbility::WatchesRead->value, 'throttle:api'])->name('api.v1.discovery.sources');

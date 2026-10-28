@@ -84,6 +84,7 @@ BASE_ENV = {
     "LOG_LEVEL": "info",
     "TRUSTED_PROXIES": "*",
     "RUN_PRICE_CACHE_ON_BOOT": "0",
+    "AFFILIATE_ENABLED": "false",
     "BROWSER_SCRAPER_ENABLED": "true",
     "SCRAPER_BASE_URL": "http://127.0.0.1:3000",
     "MAIL_MAILER": "resend",
@@ -329,7 +330,6 @@ def configure(service_id: str, key: str) -> dict:
     body = {
         "serviceDetails": {
             **DOCKER_BUILD,
-            "plan": SERVICE["plan"],
             "healthCheckPath": SERVICE["healthCheckPath"],
         },
     }

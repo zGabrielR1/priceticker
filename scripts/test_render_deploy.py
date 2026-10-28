@@ -65,3 +65,12 @@ class DeploymentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AlwaysOnPlanTest(unittest.TestCase):
+    def test_reconfigure_preserves_existing_compute_plan(self):
+        with patch.object(deploy, "call", return_value={"id": "srv-test"}) as call:
+            deploy.configure("srv-test", "test-key")
+        patch_body = call.call_args_list[0].args[2]
+        self.assertNotIn("plan", patch_body["serviceDetails"])
+        self.assertEqual("false", deploy.BASE_ENV["AFFILIATE_ENABLED"])

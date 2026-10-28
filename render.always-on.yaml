@@ -1,0 +1,110 @@
+# Always-on alternative. Applying this blueprint incurs paid compute charges.
+#
+# The service builds from the Dockerfile in this repository, so a deploy never
+# depends on a local build. State lives in Postgres (Supabase in the current
+# setup), not on Render's ephemeral disk, independently of the compute plan. Free compute still sleeps.
+#
+# To create/update the service without a browser:
+#   python scripts/render_deploy.py --check
+#   python scripts/render_deploy.py --yes
+#
+# Secrets are never committed: `sync: false` means "set this in the Render
+# dashboard/API". scripts/render_deploy.py carries the real values from the
+# gitignored envs/.env.supabase / envs/.env.resend files at deploy time.
+services:
+  - type: web
+    name: priceticker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    branch: main
+    # One process, one writer. The queue worker and cron run inside the same
+    # container (supervisor), so two instances would duplicate scheduled work.
+    numInstances: 1
+    healthCheckPath: /up
+    autoDeploy: true
+    envVars:
+      - key: APP_NAME
+        value: PriceTicker
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        value: https://priceticker.onrender.com
+      - key: APP_TIMEZONE
+        value: America/Sao_Paulo
+      - key: APP_LOCALE
+        value: en
+      - key: APP_CURRENCY_LOCALE
+        value: pt_BR
+      # Generate once on first create and keep it stable across deploys;
+      # changing it invalidates sessions and encrypted values.
+      - key: APP_KEY
+        generateValue: true
+
+      # First-boot admin. Set both values in the dashboard (or through the
+      # deploy script) before the first deploy; buddy:init-db only creates the
+      # user when the schema is brand new.
+      - key: APP_USER_NAME
+        value: Admin
+      - key: APP_USER_EMAIL
+        sync: false
+      - key: APP_USER_PASSWORD
+        sync: false
+      - key: DEFAULT_STORES_COUNTRY
+        value: brazil
+
+      # Postgres. DATABASE_URL is the only database secret; the schema keeps
+      # priceticker's tables out of the `public` schema of a shared project.
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_SEARCH_PATH
+        value: priceticker
+      - key: DB_SSLMODE
+        value: require
+      - key: DATABASE_URL
+        sync: false
+
+      - key: SESSION_DRIVER
+        value: database
+      - key: SESSION_SECURE_COOKIE
+        value: true
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: LOG_CHANNEL
+        value: stack
+      - key: LOG_STACK
+        value: single
+      - key: LOG_LEVEL
+        value: info
+      - key: TRUSTED_PROXIES
+        value: "*"
+      # Browser rendering runs on loopback inside this same free instance.
+      - key: BROWSER_SCRAPER_ENABLED
+        value: true
+      - key: SCRAPER_BASE_URL
+        value: http://127.0.0.1:3000
+      - key: AFFILIATE_ENABLED
+        value: false
+      - key: DISCOVERY_SOURCES
+        value: "{}"
+      - key: DISCOVERY_WEBHOOK_SECRET
+        sync: false
+      - key: RUN_PRICE_CACHE_ON_BOOT
+        value: 0
+
+      # Resend is optional: without RESEND_API_KEY the mailer falls back to
+      # the log driver and the app still works.
+      - key: MAIL_MAILER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM_ADDRESS
+        value: onboarding@resend.dev
+      - key: MAIL_FROM_NAME
+        value: PriceTicker

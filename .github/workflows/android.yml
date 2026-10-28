@@ -1,0 +1,39 @@
+name: Android preview
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/android.yml']
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/android.yml']
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Generated API package has its own legacy test dependencies; app checks
+      # cover the production client through the app's resolved dependencies.
+      - run: flutter analyze lib test
+      - run: flutter test
+      - run: flutter build apk --debug --dart-define=API_BASE_URL=https://priceticker.onrender.com
+      - uses: actions/upload-artifact@v4
+        with:
+          name: priceticker-android-1.1-preview
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/alert_provider.dart';
 
@@ -21,7 +22,7 @@ class _AlertInboxScreenState extends State<AlertInboxScreen> {
   Widget build(BuildContext context) {
     final ap = context.watch<AlertProvider>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Alerts')),
+      appBar: AppBar(title: const Text('Alerts'), leading: BackButton(onPressed: () => context.go('/deals'))),
       body: ap.loading
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(

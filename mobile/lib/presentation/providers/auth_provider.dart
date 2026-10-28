@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
+
 import '../../core/api_client.dart';
 import '../../data/repositories/auth_repository.dart';
 
 class AuthProvider extends ChangeNotifier {
-  AuthProvider(this._repo, this._api);
+  AuthProvider(this._repo, this._api) {
+    _api.onUnauthorized = notifyListeners;
+  }
   final AuthRepository _repo;
   final ApiClient _api;
 

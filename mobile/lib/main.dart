@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'app.dart';
 import 'core/api_client.dart';
 
@@ -24,7 +25,8 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await ApiClient().loadToken();
+  final api = ApiClient();
+  await api.loadToken();
   await _initFirebase();
-  runApp(PriceTickerApp());
+  runApp(PriceTickerApp(api: api));
 }

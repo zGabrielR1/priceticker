@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/watch_provider.dart';
 
 class WatchListScreen extends StatefulWidget {
@@ -25,7 +26,15 @@ class _WatchListScreenState extends State<WatchListScreen> {
       appBar: AppBar(
         title: const Text('Watches'),
         actions: [
-          IconButton(icon: const Icon(Icons.notifications), onPressed: () => context.go('/alerts')),
+          IconButton(
+            icon: const Icon(Icons.radar),
+            tooltip: 'Deals',
+            onPressed: () => context.go('/deals'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications),
+            onPressed: () => context.go('/alerts'),
+          ),
         ],
       ),
       body: wp.loading

@@ -2,7 +2,7 @@
 #
 # The service builds from the Dockerfile in this repository, so a deploy never
 # depends on a local build. State lives in Postgres (Supabase in the current
-# setup), not on Render's ephemeral disk, which is why the free plan is safe.
+# setup), not on Render's ephemeral disk, independently of the compute plan. Free compute still sleeps.
 #
 # To create/update the service without a browser:
 #   python scripts/render_deploy.py --check
@@ -89,6 +89,12 @@ services:
         value: true
       - key: SCRAPER_BASE_URL
         value: http://127.0.0.1:3000
+      - key: AFFILIATE_ENABLED
+        value: false
+      - key: DISCOVERY_SOURCES
+        value: "{}"
+      - key: DISCOVERY_WEBHOOK_SECRET
+        sync: false
       - key: RUN_PRICE_CACHE_ON_BOOT
         value: 0
 

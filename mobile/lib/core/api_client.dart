@@ -1,6 +1,9 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
 import 'config.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
@@ -8,6 +11,7 @@ class ApiClient {
 
   final http.Client _client;
   String? _token;
+  void Function()? onUnauthorized;
 
   static const _tokenKey = 'auth_token';
 
@@ -30,7 +34,7 @@ class ApiClient {
   bool get isAuthenticated => _token != null;
 
   Map<String, String> _headers({bool json = true}) {
-    final h = <String, String>{};
+    final h = <String, String>{'Accept': 'application/json'};
     if (json) h['Content-Type'] = 'application/json';
     if (_token != null) h['Authorization'] = 'Bearer $_token';
     return h;
@@ -40,32 +44,48 @@ class ApiClient {
     final base = AppConfig.baseUrl.endsWith('/')
         ? AppConfig.baseUrl.substring(0, AppConfig.baseUrl.length - 1)
         : AppConfig.baseUrl;
-    return Uri.parse('$base$path').replace(queryParameters: query?.map((k, v) => MapEntry(k, '$v')));
+    return Uri.parse('$base$path')
+        .replace(queryParameters: query?.map((k, v) => MapEntry(k, '$v')));
   }
 
-  Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? query}) async {
-    final res = await _client.get(_uri(path, query), headers: _headers(json: false));
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final res = await _client
+        .get(_uri(path, query), headers: _headers(json: false))
+        .timeout(const Duration(seconds: 30));
     return _decode(res);
   }
 
   Future<Map<String, dynamic>> post(String path, {Object? body}) async {
-    final res = await _client.post(_uri(path), headers: _headers(), body: jsonEncode(body ?? {}));
+    final res = await _client
+        .post(_uri(path), headers: _headers(), body: jsonEncode(body ?? {}))
+        .timeout(const Duration(seconds: 30));
     return _decode(res);
   }
 
   Future<Map<String, dynamic>> put(String path, {Object? body}) async {
-    final res = await _client.put(_uri(path), headers: _headers(), body: jsonEncode(body ?? {}));
+    final res = await _client
+        .put(_uri(path), headers: _headers(), body: jsonEncode(body ?? {}))
+        .timeout(const Duration(seconds: 30));
     return _decode(res);
   }
 
   Future<void> delete(String path) async {
-    final res = await _client.delete(_uri(path), headers: _headers(json: false));
+    final res = await _client
+        .delete(_uri(path), headers: _headers(json: false))
+        .timeout(const Duration(seconds: 30));
     if (res.statusCode >= 400) {
       throw ApiException(res.statusCode, res.body);
     }
   }
 
   Map<String, dynamic> _decode(http.Response res) {
+    if (res.statusCode == 401) {
+      setToken(null);
+      onUnauthorized?.call();
+    }
     if (res.statusCode >= 400) {
       throw ApiException(res.statusCode, res.body);
     }
