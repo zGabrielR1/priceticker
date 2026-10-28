@@ -1,17 +1,29 @@
-CURRENTTASK: Phase 7 — Render deployment (live).
+CURRENTTASK: Continuous improvements — upstream updates and hosted reliability.
 
-Objective: Run priceticker on Render with Supabase Postgres, reusing the
-operator credentials, and harden the container and deploy path.
+Production: https://priceticker.onrender.com (admin at /admin).
+Render service: srv-dbcllqqvcj2c73f2rklg, free Docker service in Oregon.
+State: Supabase Postgres, dedicated priceticker schema.
 
-STATUS: Live at https://priceticker.onrender.com (admin at /admin).
-Service srv-dbcllqqvcj2c73f2rklg, free plan, Oregon, Docker from main.
-Supabase `priceticker` schema verified: 23 tables, 39 migrations, 7 Brazilian
-stores, admin user, settings rows. `/up`, `/admin/login`, API token login,
-`/api/user` and `/api/v1/watches` all pass. Deploy script and first-boot init
-hardened (response unwrapping, superseded-build cancellation, no password
-logging).
+Implemented:
+- Five-minute GitHub Actions uptime checks (best effort; see RUNBOOK.md).
+- Supervisor manages Apache, Laravel schedule:work, and the queue worker.
+- Deployment credentials/templates live under envs/; secrets stay out of images.
+- Upstream: UTF-8 scraping, URL/product ownership enforcement, PHP 8.4.27,
+  API title search (10 terms maximum), debug rendering performance,
+  password-change login redirects, and stale Apache PID recovery.
+- Deploy script follows the ID returned by the create request, so a failed
+  request cannot report a previous live deployment as the new release.
+- CI runs PHP tests/static analysis/formatting plus Python deployment and
+  Brazilian deal-engine tests.
 
-NEXT: Rotate the Render API key used during setup; add an external pinger or a
-paid instance if cron/queue must run while the free instance sleeps; rerun the
-full PHP suite.
-Reference: RECON.md §7-8, RUNBOOK.md.
+Release checks:
+- Run relevant PHP tests against tests_db, Python tests, Pint, and PHPStan.
+- Push main; verify the GitHub CI jobs pass.
+- python3 scripts/render_deploy.py --check
+- python3 -u scripts/render_deploy.py --yes
+- Check deployed SHA, /up, login, authenticated product search and watches,
+  then revoke the temporary smoke-test token.
+
+Next: integrate discovery ingestion with persisted watch matches and alerts;
+verify scheduled store checks on real Brazilian retailer pages.
+Reference: RECON.md, RUNBOOK.md, PROGRESS.md.

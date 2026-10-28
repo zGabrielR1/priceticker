@@ -35,6 +35,26 @@ class DeploymentTest(unittest.TestCase):
                 deploy.run("key", "repo", True, False)
             write.assert_not_called()
 
+    def test_failed_deploy_request_never_adopts_an_old_live_deploy(self):
+        with patch.object(deploy, "call", side_effect=deploy.RenderError("rejected")) as api:
+            with self.assertRaises(deploy.RenderError):
+                deploy.deploy("service", "key")
+            self.assertEqual(api.call_count, 1)
+
+    def test_deploy_tracks_the_id_returned_by_create(self):
+        for created in [{"id": "new-deploy"}, {"deploy": {"id": "new-deploy"}}]:
+            with self.subTest(created=created), \
+                    patch.object(deploy, "call", side_effect=[created, {"id": "new-deploy", "status": "live"}]) as api, \
+                    patch.object(deploy.time, "sleep"):
+                self.assertEqual(deploy.deploy("service", "key"), "live")
+                self.assertEqual(api.call_args.args[0], "/services/service/deploys/new-deploy")
+
+    def test_missing_deploy_id_fails_instead_of_reporting_success(self):
+        with patch.object(deploy, "call", return_value={}) as api:
+            with self.assertRaises(deploy.RenderError):
+                deploy.deploy("service", "key")
+            self.assertEqual(api.call_count, 1)
+
     def test_merge_preserves_dashboard_only_values(self):
         result = deploy.merge_env_vars(
             [{"key": "SECRET", "value": "keep"}, {"key": "APP_NAME", "value": "old"}],

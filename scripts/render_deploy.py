@@ -451,18 +451,13 @@ def cancel_active_deploys(service_id: str, key: str) -> None:
 
 
 def deploy(service_id: str, key: str) -> str:
-    try:
-        call(f"/services/{service_id}/deploys", key,
-             {"clearCache": "do_not_clear"}, "POST")
-    except RenderError:
-        pass  # the deploy may still have started; read the newest deploy below
-
-    page = call(f"/services/{service_id}/deploys?limit=1", key)
-    started = entities(page, "deploy")
-    if not started:
-        raise RenderError("Render accepted the deploy but reported none")
-    trigger = started[0]
-    deploy_id = trigger.get("id", "")
+    # Follow the deployment returned by this request. Reading the newest one
+    # after a failed POST could silently report an older live build as success.
+    trigger = entity(call(f"/services/{service_id}/deploys", key,
+                          {"clearCache": "do_not_clear"}, "POST"), "deploy")
+    deploy_id = trigger.get("id")
+    if not deploy_id:
+        raise RenderError("Render accepted the deploy but returned no deployment id")
     print(f"deploy {deploy_id}: building…")
 
     seen = ""
