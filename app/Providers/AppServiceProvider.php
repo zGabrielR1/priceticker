@@ -13,6 +13,7 @@ use App\Services\FcmService;
 use App\Services\Helpers\NotificationsHelper;
 use App\Services\Helpers\QueueHelper;
 use App\Services\Helpers\SettingsHelper;
+use App\Services\Scrapers\BrowserWebScraperApi;
 use App\Services\Scrapers\Utf8WebScraperHttp;
 use Filament\Facades\Filament;
 use Filament\Navigation\MenuItem;
@@ -24,6 +25,7 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Jez500\WebScraperForLaravel\WebScraperApi;
 use Jez500\WebScraperForLaravel\WebScraperHttp;
 
 class AppServiceProvider extends ServiceProvider
@@ -33,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(FcmService::class);
         // Convert scraped pages to UTF-8 before they are cached (#203).
         $this->app->bind(WebScraperHttp::class, Utf8WebScraperHttp::class);
+        $this->app->bind(WebScraperApi::class, BrowserWebScraperApi::class);
     }
 
     public function boot(): void

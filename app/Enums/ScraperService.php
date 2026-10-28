@@ -19,6 +19,13 @@ enum ScraperService: string implements HasColor, HasDescription, HasLabel
         return array_column(self::cases(), 'value');
     }
 
+    public static function effective(string $service): string
+    {
+        return $service === self::Api->value && ! config('price_buddy.browser_scraper_enabled', true)
+            ? self::Http->value
+            : $service;
+    }
+
     public function getLabel(): string
     {
         return match ($this) {
@@ -31,7 +38,9 @@ enum ScraperService: string implements HasColor, HasDescription, HasLabel
     {
         return match ($this) {
             self::Http => 'Faster and and less resource intensive',
-            self::Api => 'Slower but good for scraping JavaScript rendered pages',
+            self::Api => config('price_buddy.browser_scraper_enabled', true)
+                ? 'Slower but good for scraping JavaScript rendered pages'
+                : 'Browser rendering is unavailable on this host. A direct HTTP request will be used.',
         };
     }
 

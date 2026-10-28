@@ -26,6 +26,7 @@ class MetaExtractionResource extends JsonResource
         $healing = data_get($this->resource, 'healing');
 
         return [
+            'errors' => data_get($this->resource, 'errors', []),
             'title' => data_get($this->resource, 'title'),
             'price' => data_get($this->resource, 'price'),
             // Sit alongside `price` so a client never has to reach into `store` to format it;

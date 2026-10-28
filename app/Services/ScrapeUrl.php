@@ -132,7 +132,7 @@ class ScrapeUrl
 
     public function setScraper(string $scraper): self
     {
-        $this->scraperService = $scraper;
+        $this->scraperService = ScraperService::effective($scraper);
         $scraper = WebScraper::make($this->scraperService)
             ->setConnectTimeout($this->getConnectTimeout())
             ->setRequestTimeout($this->getRequestTimeout());
@@ -230,6 +230,7 @@ class ScrapeUrl
             $page = $scraper->get();
 
             if ($errors = $scraper->getErrors()) {
+                $output['errors'] = $errors;
                 $this->errorLog('Error scraping URL', [
                     'store_id' => $store->getKey(),
                     'errors' => $errors,
@@ -252,6 +253,7 @@ class ScrapeUrl
             $output['errors'] = $scraper->getErrors();
             $output = $this->applyNotFoundPageGuards($output);
         } catch (Exception $e) {
+            $output['errors'][] = ['message' => $e->getMessage(), 'code' => $e->getCode()];
             $this->errorLog('Error scraping URL', [
                 'error' => $e->getMessage(),
             ]);

@@ -53,6 +53,10 @@ RUN apt-get update && apt-get upgrade -y \
     && docker-php-ext-install exif pcntl posix mysqli pdo pdo_mysql pdo_pgsql zip intl \
     && a2enmod rewrite headers
 
+# Keep Chromium in a separate layer so adding it reuses the PHP-extension build.
+RUN apt-get update && apt-get install -y --no-install-recommends chromium \
+    && rm -rf /var/lib/apt/lists/*
+
 # Reuse the Composer image already resolved for dependencies. A separate
 # composer/composer:2-bin pull adds a redundant registry dependency.
 COPY --from=vendor /usr/bin/composer /usr/bin/composer
@@ -74,6 +78,7 @@ COPY --from=frontend /app/public/build /app/public/build
 
 # Apache: serve /app/public directly so Laravel's .htaccess is honoured.
 COPY docker/php/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
+COPY docker/php/apache-prefork.conf /etc/apache2/conf-enabled/zzz-priceticker-prefork.conf
 COPY docker/php/apache-security.conf /etc/apache2/conf-enabled/zz-priceticker-security.conf
 COPY docker/php/schedule-cron /etc/cron.d/schedule-cron
 RUN chmod 0644 /etc/cron.d/schedule-cron

@@ -84,6 +84,11 @@ services:
         value: info
       - key: TRUSTED_PROXIES
         value: "*"
+      # Browser rendering runs on loopback inside this same free instance.
+      - key: BROWSER_SCRAPER_ENABLED
+        value: true
+      - key: SCRAPER_BASE_URL
+        value: http://127.0.0.1:3000
       - key: RUN_PRICE_CACHE_ON_BOOT
         value: 0
 

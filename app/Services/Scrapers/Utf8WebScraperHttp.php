@@ -18,6 +18,11 @@ class Utf8WebScraperHttp extends WebScraperHttp
         $request = function () {
             try {
                 $response = $this->getRequest()->get($this->url);
+                if ($response->failed()) {
+                    $this->errors[] = ['message' => 'The store returned HTTP '.$response->status().'.', 'code' => $response->status()];
+
+                    return '';
+                }
 
                 return HtmlEncodingHelper::toUtf8($response->body(), $response->header('Content-Type'));
             } catch (Exception $e) {
@@ -31,13 +36,17 @@ class Utf8WebScraperHttp extends WebScraperHttp
             return '';
         };
 
-        $this->body = $this->useCache === true
-            ? Cache::remember(
-                $this->getCacheKey($this->url),
-                now()->addMinutes($this->cacheMinsTtl),
-                fn () => $request()
-            )
-            : $request();
+        $key = $this->getCacheKey($this->url);
+        $cached = $this->useCache ? Cache::get($key) : null;
+        if (is_string($cached) && $cached !== '') {
+            $this->body = $cached;
+        } else {
+            $this->body = $request();
+            // A transient network error must not poison the cache for twelve hours.
+            if ($this->useCache && $this->body !== '' && $this->errors === []) {
+                Cache::put($key, $this->body, now()->addMinutes($this->cacheMinsTtl));
+            }
+        }
 
         return $this;
     }

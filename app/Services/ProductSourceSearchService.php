@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Dto\StandardStrategyDto;
+use App\Enums\ScraperService;
 use App\Models\ProductSource;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -38,7 +39,7 @@ class ProductSourceSearchService
 
     public function makeScraper(string $query): WebScraperInterface
     {
-        return WebScraper::make($this->source->scraper_service)
+        return WebScraper::make(ScraperService::effective($this->source->scraper_service))
             ->from($this->buildSearchUrl($query));
     }
 

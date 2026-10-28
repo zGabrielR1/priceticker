@@ -22,6 +22,9 @@ return [
     | The url to the scraper service.
     |--------------------------------------------------------------------------
     */
+    // Standalone hosted builds can fall back to HTTP without a Compose scraper.
+    'browser_scraper_enabled' => env('BROWSER_SCRAPER_ENABLED', true),
+
     'scraper_api_url' => env('SCRAPER_BASE_URL', 'http://scraper:3000'),
 
     /*

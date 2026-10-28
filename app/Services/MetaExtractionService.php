@@ -323,6 +323,7 @@ class MetaExtractionService
             'description' => data_get($result, 'description'),
             'availability' => data_get($result, 'availability'),
             'store' => data_get($result, 'store'),
+            'errors' => array_map(fn (array $error): array => \Illuminate\Support\Arr::only($error, ['message', 'code']), $result['errors'] ?? []),
         ];
     }
 }

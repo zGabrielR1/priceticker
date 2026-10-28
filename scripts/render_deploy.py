@@ -84,6 +84,8 @@ BASE_ENV = {
     "LOG_LEVEL": "info",
     "TRUSTED_PROXIES": "*",
     "RUN_PRICE_CACHE_ON_BOOT": "0",
+    "BROWSER_SCRAPER_ENABLED": "true",
+    "SCRAPER_BASE_URL": "http://127.0.0.1:3000",
     "MAIL_MAILER": "resend",
     "MAIL_FROM_NAME": "PriceTicker",
 }

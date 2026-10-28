@@ -61,7 +61,7 @@ trait HasScraperTrait
                 ->options(ScraperService::class)
                 ->descriptions([
                     ScraperService::Http->value => 'Faster and less resource intensive. Use this for JSON strategy',
-                    ScraperService::Api->value => 'Slower but good for scraping JavaScript rendered pages',
+                    ScraperService::Api->value => ScraperService::Api->getDescription(),
                 ])
                 ->reactive()
                 ->default(ScraperService::Http),

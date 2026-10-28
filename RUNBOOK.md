@@ -106,3 +106,20 @@ not, the script is the reliable path and deploys the current branch head.
 - ntfy remains a notification channel; FCM is used for mobile push.
 - Mail uses Resend when `RESEND_API_KEY` is present; otherwise Laravel's `log`
   mailer keeps the app usable without credentials.
+
+## Browser scraping in the free hosted container
+
+The Compose hostname `scraper` does not exist on Render. The hosted Dockerfile
+installs Chromium and Supervisor starts a browser API on `127.0.0.1:3000`;
+`SCRAPER_BASE_URL` points there. It is never exposed as a public endpoint.
+The PHP server serializes rendering, browser sessions have isolated temporary
+profiles, and Apache concurrency is bounded to leave memory for one browser.
+The local renderer supports full-page HTML, bounded timeouts and a short JavaScript
+wait. Advanced external-scraper options such as custom cookies/device emulation
+require an external compatible scraper configured in `envs/.env.render`.
+
+Set `BROWSER_SCRAPER_ENABLED=false` for a deployment without Chromium; stores
+configured for browser scraping then use HTTP. HTTP cannot render JavaScript or
+solve a retailer rejecting the hosting network. Extraction responses include
+sanitized `errors` with a message and status code; failed HTTP responses are
+never cached as product pages. Retailer blocks must never become price history.

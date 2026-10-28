@@ -75,7 +75,7 @@ class HealingContext
             $timeout = $timeout === null ? $remaining : min($timeout, $remaining);
         }
 
-        $service = $rendered ? ScraperService::Api->value : ScraperService::Http->value;
+        $service = ScraperService::effective($rendered ? ScraperService::Api->value : ScraperService::Http->value);
 
         $scraper = WebScraper::make($service)->setUrl($this->url);
 
@@ -93,7 +93,7 @@ class HealingContext
 
         $this->html = $scraper->setOptions($this->store->scraper_options)->get()->getBody();
 
-        if ($rendered) {
+        if ($service === ScraperService::Api->value) {
             $this->usedBrowser = true;
         }
 

@@ -29,6 +29,7 @@ class AutoCreateStore
 
     public function __construct(protected string $url, public ?string $html = null, string $scraper = self::DEFAULT_SCRAPER, int $timeout = 30)
     {
+        $scraper = ScraperService::effective($scraper);
         $this->strategies = config('price_buddy.auto_create_store_strategies', []);
 
         if (empty($html)) {
