@@ -16,39 +16,48 @@ class DiscoveryController
 {
     public function index(Request $request): JsonResponse
     {
-        $rows = DB::table('discovery_matches as matches')
+        $query = DB::table('discovery_matches as matches')
             ->join('watches', 'watches.id', '=', 'matches.watch_id')
             ->join('discovery_offers as offers', 'offers.id', '=', 'matches.offer_id')
             ->where('watches.user_id', $request->user()->id)->where('watches.is_active', true)
             ->where('matches.expires_at', '>', now())->where('offers.available', true)
             ->whereIn('offers.source', array_keys(config('discovery.sources', [])))
-            ->orderByDesc('offers.observed_at')->limit(100)
-            ->select('offers.*', 'matches.reason', 'matches.watch_id', 'matches.expires_at', 'watches.name as watch_name')->get();
+            ->orderByDesc('offers.observed_at')->orderByDesc('matches.id')
+            ->select('offers.*', 'matches.reason', 'matches.watch_id', 'matches.expires_at', 'watches.name as watch_name');
         // Re-evaluate current rules so edits cannot leave obsolete matches visible.
         $watches = Watch::where('user_id', $request->user()->id)->get()->keyBy('id');
-        // Fetch histories once for the whole inbox, even when an offer matches
-        // several watches. Mobile refreshes must not issue one query per card.
-        $histories = DB::table('discovery_samples')->whereIn('offer_id', $rows->pluck('id')->unique())
-            ->where('day', '>=', now()->subDays(31)->toDateString())
-            ->where('day', '<', now()->toDateString())->get()->groupBy('offer_id');
-        $rows = $rows->filter(function ($row) use ($watches, $histories) {
-            // A watch can be deleted between the inbox and watch queries.
-            $watch = $watches->get($row->watch_id);
-            if (! $watch) {
-                return false;
-            }
-            $observedAt = CarbonImmutable::parse($row->observed_at);
-            $history = $histories->get($row->id, collect())
-                ->filter(fn ($sample) => $sample->day < $observedAt->toDateString() && $sample->day >= $observedAt->subDays(30)->toDateString())
-                ->pluck('price')->map(fn ($p) => (float) $p)->all();
-            $reason = app(DealMatcher::class)->reason($watch, (array) $row, $history, $row->source);
-            if ($reason === null) {
-                return false;
-            }
-            $row->reason = $reason;
+        $rows = collect();
+        // Apply the display limit after current rules, so obsolete matches
+        // cannot crowd valid offers out of the inbox.
+        $query->chunk(100, function ($batch) use (&$rows, $watches) {
+            // Fetch histories once for the whole inbox, even when an offer matches
+            // several watches. Mobile refreshes must not issue one query per card.
+            $histories = DB::table('discovery_samples')->whereIn('offer_id', $batch->pluck('id')->unique())
+                ->where('day', '>=', now()->subDays(31)->toDateString())
+                ->where('day', '<', now()->toDateString())->get()->groupBy('offer_id');
+            $valid = $batch->filter(function ($row) use ($watches, $histories) {
+                // A watch can be deleted between the inbox and watch queries.
+                $watch = $watches->get($row->watch_id);
+                if (! $watch) {
+                    return false;
+                }
+                $observedAt = CarbonImmutable::parse($row->observed_at);
+                $history = $histories->get($row->id, collect())
+                    ->filter(fn ($sample) => $sample->day < $observedAt->toDateString() && $sample->day >= $observedAt->subDays(30)->toDateString())
+                    ->pluck('price')->map(fn ($p) => (float) $p)->all();
+                $reason = app(DealMatcher::class)->reason($watch, (array) $row, $history, $row->source);
+                if ($reason === null) {
+                    return false;
+                }
+                $row->reason = $reason;
 
-            return true;
-        })->values();
+                return true;
+            })->values();
+
+            $rows = $rows->concat($valid)->take(100)->values();
+
+            return $rows->count() < 100;
+        });
 
         $rows->each(function ($row) {
             $row->observed_at = \Carbon\Carbon::parse($row->observed_at)->toIso8601String();

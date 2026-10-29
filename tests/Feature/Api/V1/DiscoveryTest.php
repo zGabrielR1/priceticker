@@ -59,6 +59,21 @@ class DiscoveryTest extends TestCase
         $this->getJson('/api/v1/discovery/sources')->assertJsonPath('data.0.state', 'failed');
     }
 
+    public function test_obsolete_matches_do_not_hide_valid_deals_beyond_the_first_batch(): void
+    {
+        $watch = $this->watch();
+        $rows = [];
+        for ($i = 0; $i < 101; $i++) {
+            $row = $this->rows($i === 0 ? 50 : 90)[0];
+            $row['sku'] = 'sku-'.$i;
+            $rows[] = $row;
+        }
+        app(DiscoveryIngestor::class)->ingest('retailer', $rows);
+        $watch->update(['rules' => ['max_price' => 60]]);
+        Sanctum::actingAs(User::findOrFail(1), ['watches:read']);
+        $this->getJson('/api/v1/deals')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.sku', 'sku-0');
+    }
+
     private function watch(int $user = 1, array $rules = ['max_price' => 100]): Watch
     {
         return Watch::create(['user_id' => $user, 'type' => 'product', 'name' => 'GPU', 'config' => ['keywords' => ['RTX']], 'rules' => $rules, 'is_active' => true]);

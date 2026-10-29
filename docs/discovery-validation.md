@@ -5,7 +5,7 @@ billing were not changed. The user chose to keep hosting free and accept
 best-effort availability. The paid blueprint is an optional reference.
 
 Passed:
-- Discovery PHP feature suite: 18 tests, 81 assertions (isolated SQLite).
+- Discovery PHP feature suite: 19 tests, 84 assertions (isolated SQLite).
 - Deployment/source-probe Python suite: 9 tests, including preservation of the current compute plan.
 - Existing Brazilian deal engine Python suite: 21 tests.
 - PHP Pint on the 11 new/changed PHP files.
@@ -84,3 +84,8 @@ failed. Successful polling checks become stale after twice the configured interv
 (minimum two minutes); push-only sources use the deal freshness window. Android
 shows overdue updates explicitly. PHP tests/static checks, Flutter analysis and
 bundle compilation passed; mobile runtime validation remains pending.
+
+Inbox completeness: the 100-card display limit now applies after current watch
+rules are checked. Candidates and histories are read in batches; outdated
+matches no longer hide valid offers beyond the first batch. A 101-offer regression
+passes, along with the discovery suite and targeted PHP static checks.
