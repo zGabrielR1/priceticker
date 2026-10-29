@@ -62,7 +62,19 @@ class DiscoveryController
     {
         $sources = [];
         foreach (config('discovery.sources', []) as $id => $source) {
-            $sources[] = ['id' => $id, 'name' => $source['name'] ?? $id, 'origin' => $source['origin'], 'status' => Cache::get('discovery:status:'.$id)];
+            $status = Cache::get('discovery:status:'.$id);
+            $staleAfter = max(120, 2 * (int) ($source['interval_seconds'] ?? 300));
+            if (empty($source['endpoint'])) {
+                $staleAfter = (int) config('discovery.ttl_minutes') * 60;
+            }
+            $state = 'waiting';
+            if ($status) {
+                $state = empty($status['healthy']) ? 'failed' : 'healthy';
+                if ($state === 'healthy' && CarbonImmutable::parse($status['checked_at'])->addSeconds($staleAfter)->isPast()) {
+                    $state = 'stale';
+                }
+            }
+            $sources[] = ['id' => $id, 'name' => $source['name'] ?? $id, 'origin' => $source['origin'], 'status' => $status, 'state' => $state];
         }
 
         return response()->json(['data' => $sources]);

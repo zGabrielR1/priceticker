@@ -47,6 +47,18 @@ class DiscoveryTest extends TestCase
         $this->assertSame(1, DB::table('discovery_samples')->count());
     }
 
+    public function test_source_health_expires_when_updates_stop(): void
+    {
+        Sanctum::actingAs(User::findOrFail(1), ['watches:read']);
+        $this->getJson('/api/v1/discovery/sources')->assertJsonPath('data.0.state', 'waiting');
+        Cache::put('discovery:status:retailer', ['healthy' => true, 'checked_at' => now()->toIso8601String()]);
+        $this->getJson('/api/v1/discovery/sources')->assertJsonPath('data.0.state', 'healthy');
+        $this->travel(31)->minutes();
+        $this->getJson('/api/v1/discovery/sources')->assertJsonPath('data.0.state', 'stale');
+        Cache::put('discovery:status:retailer', ['healthy' => false, 'checked_at' => now()->toIso8601String()]);
+        $this->getJson('/api/v1/discovery/sources')->assertJsonPath('data.0.state', 'failed');
+    }
+
     private function watch(int $user = 1, array $rules = ['max_price' => 100]): Watch
     {
         return Watch::create(['user_id' => $user, 'type' => 'product', 'name' => 'GPU', 'config' => ['keywords' => ['RTX']], 'rules' => $rules, 'is_active' => true]);

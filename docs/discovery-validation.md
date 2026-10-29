@@ -5,7 +5,7 @@ billing were not changed. The user chose to keep hosting free and accept
 best-effort availability. The paid blueprint is an optional reference.
 
 Passed:
-- Discovery PHP feature suite: 17 tests, 77 assertions (isolated SQLite).
+- Discovery PHP feature suite: 18 tests, 81 assertions (isolated SQLite).
 - Deployment/source-probe Python suite: 9 tests, including preservation of the current compute plan.
 - Existing Brazilian deal engine Python suite: 21 tests.
 - PHP Pint on the 11 new/changed PHP files.
@@ -78,3 +78,9 @@ Source removal follow-up: removing a configured source immediately hides its
 existing deals while preserving observations and history. The inbox also tolerates
 a watch being deleted between its database reads. Discovery tests, formatting
 and targeted static analysis passed locally.
+
+Source freshness: source health now distinguishes waiting, healthy, stale and
+failed. Successful polling checks become stale after twice the configured interval
+(minimum two minutes); push-only sources use the deal freshness window. Android
+shows overdue updates explicitly. PHP tests/static checks, Flutter analysis and
+bundle compilation passed; mobile runtime validation remains pending.

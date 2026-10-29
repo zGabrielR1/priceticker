@@ -246,18 +246,20 @@ class _DealFeedScreenState extends State<DealFeedScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
-                    s['status']?['healthy'] == true
+                    s['state'] == 'healthy'
                         ? Icons.check_circle_outline
                         : Icons.schedule,
                   ),
                   title: Text(s['name'] as String),
-                  subtitle: Text(
-                    s['status'] == null
-                        ? 'Waiting for first check'
-                        : s['status']['healthy'] == true
-                        ? 'Last successful check: ${s['status']['checked_at']}'
-                        : 'Last check failed; retrying with backoff',
-                  ),
+                  subtitle: Text(switch (s['state']) {
+                    'healthy' =>
+                      'Last successful check: ${s['status']['checked_at']}',
+                    'stale' =>
+                      'Updates are overdue. Prices may no longer be current.',
+                    'failed' =>
+                      'Last check failed. Waiting for a successful update.',
+                    _ => 'Waiting for first check',
+                  }),
                 ),
             ],
           ],
