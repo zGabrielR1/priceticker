@@ -35,6 +35,18 @@ class DiscoveryTest extends TestCase
         config(['discovery.sources' => ['retailer' => ['origin' => 'https://store.example', 'driver' => 'json']]]);
     }
 
+    public function test_removing_a_source_immediately_hides_its_existing_deals(): void
+    {
+        $this->watch();
+        app(DiscoveryIngestor::class)->ingest('retailer', $this->rows());
+        Sanctum::actingAs(User::findOrFail(1), ['watches:read']);
+        $this->getJson('/api/v1/deals')->assertOk()->assertJsonCount(1, 'data');
+        config(['discovery.sources' => []]);
+        $this->getJson('/api/v1/deals')->assertOk()->assertJsonCount(0, 'data');
+        $this->assertSame(1, DB::table('discovery_offers')->count());
+        $this->assertSame(1, DB::table('discovery_samples')->count());
+    }
+
     private function watch(int $user = 1, array $rules = ['max_price' => 100]): Watch
     {
         return Watch::create(['user_id' => $user, 'type' => 'product', 'name' => 'GPU', 'config' => ['keywords' => ['RTX']], 'rules' => $rules, 'is_active' => true]);

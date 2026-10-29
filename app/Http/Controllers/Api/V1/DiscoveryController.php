@@ -21,6 +21,7 @@ class DiscoveryController
             ->join('discovery_offers as offers', 'offers.id', '=', 'matches.offer_id')
             ->where('watches.user_id', $request->user()->id)->where('watches.is_active', true)
             ->where('matches.expires_at', '>', now())->where('offers.available', true)
+            ->whereIn('offers.source', array_keys(config('discovery.sources', [])))
             ->orderByDesc('offers.observed_at')->limit(100)
             ->select('offers.*', 'matches.reason', 'matches.watch_id', 'matches.expires_at', 'watches.name as watch_name')->get();
         // Re-evaluate current rules so edits cannot leave obsolete matches visible.
@@ -31,11 +32,16 @@ class DiscoveryController
             ->where('day', '>=', now()->subDays(31)->toDateString())
             ->where('day', '<', now()->toDateString())->get()->groupBy('offer_id');
         $rows = $rows->filter(function ($row) use ($watches, $histories) {
+            // A watch can be deleted between the inbox and watch queries.
+            $watch = $watches->get($row->watch_id);
+            if (! $watch) {
+                return false;
+            }
             $observedAt = CarbonImmutable::parse($row->observed_at);
             $history = $histories->get($row->id, collect())
                 ->filter(fn ($sample) => $sample->day < $observedAt->toDateString() && $sample->day >= $observedAt->subDays(30)->toDateString())
                 ->pluck('price')->map(fn ($p) => (float) $p)->all();
-            $reason = app(DealMatcher::class)->reason($watches[$row->watch_id], (array) $row, $history, $row->source);
+            $reason = app(DealMatcher::class)->reason($watch, (array) $row, $history, $row->source);
             if ($reason === null) {
                 return false;
             }

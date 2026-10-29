@@ -5,7 +5,7 @@ billing were not changed. The user chose to keep hosting free and accept
 best-effort availability. The paid blueprint is an optional reference.
 
 Passed:
-- Discovery PHP feature suite: 16 tests, 71 assertions (isolated SQLite).
+- Discovery PHP feature suite: 17 tests, 77 assertions (isolated SQLite).
 - Deployment/source-probe Python suite: 9 tests, including preservation of the current compute plan.
 - Existing Brazilian deal engine Python suite: 21 tests.
 - PHP Pint on the 11 new/changed PHP files.
@@ -73,3 +73,8 @@ Watch editor and account isolation follow-up:
   for session_isolation_test.dart failed before executing tests because binding
   the runner's localhost socket remains prohibited. These cases are not reported
   as passes. Flutter analysis and debug bundle compilation were checked locally.
+
+Source removal follow-up: removing a configured source immediately hides its
+existing deals while preserving observations and history. The inbox also tolerates
+a watch being deleted between its database reads. Discovery tests, formatting
+and targeted static analysis passed locally.
