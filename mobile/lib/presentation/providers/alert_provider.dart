@@ -12,28 +12,55 @@ class AlertProvider extends ChangeNotifier {
   String? error;
   final Set<String> busy = {};
 
+  int _generation = 0;
+  bool _disposed = false;
+
+  void reset() {
+    _generation++;
+    alerts = [];
+    error = null;
+    loading = false;
+    busy.clear();
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _generation++;
+    super.dispose();
+  }
+
   Future<void> load() async {
     if (loading) return;
+    final generation = _generation;
     loading = true;
     error = null;
     alerts = [];
     notifyListeners();
     try {
-      alerts = await _repo.list();
+      final result = await _repo.list();
+      if (_disposed || generation != _generation) return;
+      alerts = result;
     } catch (_) {
+      if (_disposed || generation != _generation) return;
       error = 'Could not load your alerts. Pull down to try again.';
     } finally {
-      loading = false;
-      notifyListeners();
+      if (!_disposed && generation == _generation) {
+        loading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> markRead(String id) async {
+    final generation = _generation;
     if (!busy.add(id)) return;
     error = null;
     notifyListeners();
     try {
       await _repo.markRead(id);
+      if (_disposed || generation != _generation) return;
       alerts = alerts
           .map(
             (a) => a.id == id
@@ -47,10 +74,13 @@ class AlertProvider extends ChangeNotifier {
           )
           .toList();
     } catch (_) {
+      if (_disposed || generation != _generation) return;
       error = 'Could not mark this alert as read. Please try again.';
     } finally {
-      busy.remove(id);
-      notifyListeners();
+      if (!_disposed && generation == _generation) {
+        busy.remove(id);
+        notifyListeners();
+      }
     }
   }
 }

@@ -11,24 +11,43 @@ class ApiClient {
 
   final http.Client _client;
   String? _token;
-  void Function()? onUnauthorized;
+  void Function()? onSessionChanged;
+  int _sessionVersion = 0;
+  int get sessionVersion => _sessionVersion;
+  Future<void> _tokenWrites = Future.value();
 
   static const _tokenKey = 'auth_token';
 
   Future<void> loadToken() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString(_tokenKey);
-  }
-
-  Future<void> setToken(String? token) async {
-    _token = token;
-    final prefs = await SharedPreferences.getInstance();
-    if (token == null) {
-      await prefs.remove(_tokenKey);
-    } else {
-      await prefs.setString(_tokenKey, token);
+    final saved = prefs.getString(_tokenKey);
+    if (_token != saved) {
+      _token = saved;
+      _sessionVersion++;
+      onSessionChanged?.call();
     }
   }
+
+  Future<void> setToken(String? token) {
+    if (_token != token) {
+      _token = token;
+      _sessionVersion++;
+      onSessionChanged?.call();
+    }
+    // Persist transitions in order so an earlier logout cannot erase a later login.
+    final write = _tokenWrites.then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      if (token == null) {
+        await prefs.remove(_tokenKey);
+      } else {
+        await prefs.setString(_tokenKey, token);
+      }
+    });
+    _tokenWrites = write.catchError((Object _) {});
+    return write;
+  }
+
+  void close() => _client.close();
 
   String? get token => _token;
   bool get isAuthenticated => _token != null;
@@ -52,39 +71,41 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? query,
   }) async {
+    final session = _sessionVersion;
     final res = await _client
         .get(_uri(path, query), headers: _headers(json: false))
         .timeout(const Duration(seconds: 30));
-    return _decode(res);
+    return _decode(res, session);
   }
 
   Future<Map<String, dynamic>> post(String path, {Object? body}) async {
+    final session = _sessionVersion;
     final res = await _client
         .post(_uri(path), headers: _headers(), body: jsonEncode(body ?? {}))
         .timeout(const Duration(seconds: 30));
-    return _decode(res);
+    return _decode(res, session);
   }
 
   Future<Map<String, dynamic>> put(String path, {Object? body}) async {
+    final session = _sessionVersion;
     final res = await _client
         .put(_uri(path), headers: _headers(), body: jsonEncode(body ?? {}))
         .timeout(const Duration(seconds: 30));
-    return _decode(res);
+    return _decode(res, session);
   }
 
   Future<void> delete(String path) async {
+    final session = _sessionVersion;
     final res = await _client
         .delete(_uri(path), headers: _headers(json: false))
         .timeout(const Duration(seconds: 30));
-    if (res.statusCode >= 400) {
-      throw ApiException(res.statusCode, res.body);
-    }
+    await _decode(res, session);
   }
 
-  Map<String, dynamic> _decode(http.Response res) {
+  Future<Map<String, dynamic>> _decode(http.Response res, int session) async {
+    if (session != _sessionVersion) throw const SessionChangedException();
     if (res.statusCode == 401) {
-      setToken(null);
-      onUnauthorized?.call();
+      await setToken(null);
     }
     if (res.statusCode >= 400) {
       throw ApiException(res.statusCode, res.body);
@@ -102,4 +123,8 @@ class ApiException implements Exception {
   final String body;
   @override
   String toString() => 'ApiException($statusCode): $body';
+}
+
+class SessionChangedException implements Exception {
+  const SessionChangedException();
 }

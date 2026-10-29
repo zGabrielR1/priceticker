@@ -33,3 +33,14 @@ The generated API package under packages/priceticker_api has legacy test stubs
 and its own test SDK constraint. Analyze the app via `flutter analyze lib test`;
 regenerate/update that package's test tooling before treating its generated
 stubs as an independent executable suite.
+
+The watch list now supports editing existing watches, pause/resume, deletion
+confirmation and sign-out. Editing preserves extra configuration and alert/history
+rules outside the form; removing a target price enables the default historical
+threshold if one did not exist. Preferred stores removed from server configuration
+remain visible in the editor so they can be explicitly deselected.
+
+Account transitions clear private watch/alert lists and reject stale in-flight
+responses. Regression coverage is in session_isolation_test.dart and
+watch_edit_test.dart; these tests still require execution on a runner that allows
+Flutter's localhost test socket.

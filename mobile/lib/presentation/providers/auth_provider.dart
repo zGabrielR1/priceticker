@@ -4,13 +4,22 @@ import '../../core/api_client.dart';
 import '../../data/repositories/auth_repository.dart';
 
 class AuthProvider extends ChangeNotifier {
-  AuthProvider(this._repo, this._api) {
-    _api.onUnauthorized = notifyListeners;
+  AuthProvider(this._repo, this._api, {void Function()? onSessionChanged}) {
+    _api.onSessionChanged = () {
+      onSessionChanged?.call();
+      _notify();
+    };
   }
   final AuthRepository _repo;
   final ApiClient _api;
 
+  bool _disposed = false;
   bool _loading = false;
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
   bool get loading => _loading;
   bool get isAuthenticated => _api.isAuthenticated;
 
@@ -18,17 +27,27 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> login(String email, String password) async {
     _loading = true;
-    notifyListeners();
+    _notify();
     try {
       await _repo.login(email, password);
     } finally {
       _loading = false;
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<void> logout() async {
-    await _repo.logout();
-    notifyListeners();
+    try {
+      await _repo.logout();
+    } finally {
+      _notify();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _api.onSessionChanged = null;
+    super.dispose();
   }
 }

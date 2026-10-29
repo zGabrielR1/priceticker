@@ -58,3 +58,18 @@ Observation ordering and watch-filter follow-up:
   unrelated type-specific config/rule JSON fields.
 - Flutter analysis and bundle compilation pass; mobile runtime tests still need
   the previously documented socket-capable runner. No deployment was attempted.
+
+Watch editor and account isolation follow-up:
+- Existing watches can be edited from the list. The form loads current server
+  data, preserves paused state, extra config fields and non-editable rules, and
+  exposes removed preferred stores so they can be cleared explicitly.
+- The app owns and disposes its router/providers. Account transitions clear watch
+  and alert state; in-flight operations cannot write into a later account state.
+- API responses are bound to the session that issued them. A stale success or 401
+  cannot affect a new login; DELETE now handles 401 consistently with GET/POST.
+- Local token persistence is serialized; a delayed logout cannot erase a later
+  login. Sign-out is available from the watch list.
+- Added six regression cases for editing and session races. The runtime attempt
+  for session_isolation_test.dart failed before executing tests because binding
+  the runner's localhost socket remains prohibited. These cases are not reported
+  as passes. Flutter analysis and debug bundle compilation were checked locally.

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/watch_provider.dart';
+import '../providers/auth_provider.dart';
 
 class WatchListScreen extends StatefulWidget {
   const WatchListScreen({super.key});
@@ -26,6 +27,25 @@ class _WatchListScreenState extends State<WatchListScreen> {
       appBar: AppBar(
         title: const Text('Watches'),
         actions: [
+          IconButton(
+            tooltip: 'Sign out',
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              try {
+                await context.read<AuthProvider>().logout();
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Signed out locally. Server revocation could not be confirmed.',
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.radar),
             tooltip: 'Deals',
@@ -63,7 +83,18 @@ class _WatchListScreenState extends State<WatchListScreen> {
                 child: Column(
                   children: [
                     SwitchListTile(
-                      title: Text(w.name),
+                      title: Row(
+                        children: [
+                          Expanded(child: Text(w.name)),
+                          IconButton(
+                            tooltip: 'Edit watch',
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: wp.busy.contains(w.id)
+                                ? null
+                                : () => context.go('/watches/${w.id}/edit'),
+                          ),
+                        ],
+                      ),
                       subtitle: Text(
                         '${w.isActive ? 'Watching' : 'Paused'} · ${w.type}',
                       ),

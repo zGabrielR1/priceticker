@@ -17,16 +17,41 @@ import 'presentation/screens/product_detail_screen.dart';
 import 'presentation/screens/watch_create_screen.dart';
 import 'presentation/screens/watch_list_screen.dart';
 
-class PriceTickerApp extends StatelessWidget {
-  PriceTickerApp({super.key, ApiClient? api}) : _api = api ?? ApiClient();
+class PriceTickerApp extends StatefulWidget {
+  const PriceTickerApp({super.key, this.api});
+  final ApiClient? api;
 
-  final ApiClient _api;
+  @override
+  State<PriceTickerApp> createState() => _PriceTickerAppState();
+}
+
+class _PriceTickerAppState extends State<PriceTickerApp> {
+  late final _api = widget.api ?? ApiClient();
   late final _authRepo = AuthRepository(_api);
   late final _watchRepo = WatchRepository(_api);
   late final _alertRepo = AlertRepository(_api);
   late final _productRepo = ProductRepository(_api);
 
-  late final _auth = AuthProvider(_authRepo, _api);
+  late final _watchState = WatchProvider(_watchRepo);
+  late final _alertState = AlertProvider(_alertRepo);
+  late final _auth = AuthProvider(
+    _authRepo,
+    _api,
+    onSessionChanged: () {
+      _watchState.reset();
+      _alertState.reset();
+    },
+  );
+
+  @override
+  void dispose() {
+    _router.dispose();
+    _auth.dispose();
+    _watchState.dispose();
+    _alertState.dispose();
+    if (widget.api == null) _api.close();
+    super.dispose();
+  }
 
   late final _router = GoRouter(
     refreshListenable: _auth,
@@ -52,6 +77,12 @@ class PriceTickerApp extends StatelessWidget {
         builder: (context, state) => const WatchCreateScreen(),
       ),
       GoRoute(
+        path: '/watches/:id/edit',
+        builder: (context, state) => WatchCreateScreen(
+          watchId: int.tryParse(state.pathParameters['id'] ?? '') ?? -1,
+        ),
+      ),
+      GoRoute(
         path: '/alerts',
         builder: (context, state) => const AlertInboxScreen(),
       ),
@@ -70,9 +101,10 @@ class PriceTickerApp extends StatelessWidget {
       providers: [
         Provider.value(value: _api),
         ChangeNotifierProvider.value(value: _auth),
-        ChangeNotifierProvider(create: (_) => WatchProvider(_watchRepo)),
-        ChangeNotifierProvider(create: (_) => AlertProvider(_alertRepo)),
+        ChangeNotifierProvider.value(value: _watchState),
+        ChangeNotifierProvider.value(value: _alertState),
         Provider.value(value: _productRepo),
+        Provider.value(value: _watchRepo),
       ],
       child: MaterialApp.router(
         title: 'PriceTicker',
