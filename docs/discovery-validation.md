@@ -5,7 +5,7 @@ billing were not changed. The user chose to keep hosting free and accept
 best-effort availability. The paid blueprint is an optional reference.
 
 Passed:
-- Discovery PHP feature suite: 11 tests, 46 assertions (isolated SQLite).
+- Discovery PHP feature suite: 16 tests, 71 assertions (isolated SQLite).
 - Deployment/source-probe Python suite: 9 tests, including preservation of the current compute plan.
 - Existing Brazilian deal engine Python suite: 21 tests.
 - PHP Pint on the 11 new/changed PHP files.
@@ -47,3 +47,14 @@ Local follow-up improvements:
   execution remains pending because the Flutter test runner needs a local socket.
 - User requested local work only from this point; provide the manual deployment
   commands when the user explicitly says the session is finished.
+
+Observation ordering and watch-filter follow-up:
+- Added a migration for a microsecond observation watermark per source/SKU.
+- Push observations require an explicit timestamp and reject stale/future input;
+  earlier snapshots and exact timestamp retries cannot rewind a price or extend
+  its expiry. Late observations retain their original history date and timestamp.
+- Watch creation supports any/all keyword matching, excluded terms and preferred
+  stores. API validation limits filter sizes and numeric rules while preserving
+  unrelated type-specific config/rule JSON fields.
+- Flutter analysis and bundle compilation pass; mobile runtime tests still need
+  the previously documented socket-capable runner. No deployment was attempted.

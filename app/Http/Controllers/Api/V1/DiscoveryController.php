@@ -6,6 +6,7 @@ use App\Models\Watch;
 use App\Services\Discovery\CatalogAdapter;
 use App\Services\Discovery\DealMatcher;
 use App\Services\Discovery\DiscoveryIngestor;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -27,10 +28,13 @@ class DiscoveryController
         // Fetch histories once for the whole inbox, even when an offer matches
         // several watches. Mobile refreshes must not issue one query per card.
         $histories = DB::table('discovery_samples')->whereIn('offer_id', $rows->pluck('id')->unique())
-            ->where('day', '>=', now()->subDays(30)->toDateString())
+            ->where('day', '>=', now()->subDays(31)->toDateString())
             ->where('day', '<', now()->toDateString())->get()->groupBy('offer_id');
         $rows = $rows->filter(function ($row) use ($watches, $histories) {
-            $history = $histories->get($row->id, collect())->pluck('price')->map(fn ($p) => (float) $p)->all();
+            $observedAt = CarbonImmutable::parse($row->observed_at);
+            $history = $histories->get($row->id, collect())
+                ->filter(fn ($sample) => $sample->day < $observedAt->toDateString() && $sample->day >= $observedAt->subDays(30)->toDateString())
+                ->pluck('price')->map(fn ($p) => (float) $p)->all();
             $reason = app(DealMatcher::class)->reason($watches[$row->watch_id], (array) $row, $history, $row->source);
             if ($reason === null) {
                 return false;
@@ -68,8 +72,14 @@ class DiscoveryController
         $definition = config('discovery.sources', [])[$source] ?? null;
         abort_unless($definition, 404);
         abort_if(strlen($request->getContent()) > 5_000_000, 413);
-        $rows = $adapter->normalize($definition, $request->json()->all());
-        $matches = $ingestor->ingest($source, $rows);
+        $request->validate([
+            'observed_at' => ['required', 'string', 'date', 'regex:/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$/'],
+            'products' => [($definition['driver'] ?? '') === 'vtex' ? 'present' : 'sometimes', 'array'],
+        ]);
+        $payload = $request->json()->all();
+        $catalog = ($definition['driver'] ?? '') === 'vtex' ? ($payload['products'] ?? []) : $payload;
+        $rows = $adapter->normalize($definition, $catalog);
+        $matches = $ingestor->ingest($source, $rows, CarbonImmutable::parse($payload['observed_at']));
         Cache::put('discovery:status:'.$source, ['checked_at' => now()->toIso8601String(), 'offers' => count($rows), 'matches' => $matches, 'healthy' => true], now()->addDays(7));
 
         return response()->json(['accepted' => count($rows), 'matches' => $matches]);

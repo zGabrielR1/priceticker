@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\Discovery\CatalogAdapter;
 use App\Services\Discovery\DiscoveryIngestor;
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class DiscoverDeals extends Command
             }
             try {
                 // Endpoints are operator configuration. No redirects to affiliate/other hosts.
+                $observedAt = CarbonImmutable::now();
                 $response = Http::acceptJson()->timeout(20)->withoutRedirecting()->get($source['endpoint']);
                 if (! $response->successful()) {
                     throw new \RuntimeException('Catalog HTTP '.$response->status());
@@ -36,7 +38,7 @@ class DiscoverDeals extends Command
                     throw new \RuntimeException('Catalog exceeds 5 MB budget');
                 }
                 $rows = $adapter->normalize($source, $response->json());
-                $matches = $ingestor->ingest((string) $id, $rows);
+                $matches = $ingestor->ingest((string) $id, $rows, $observedAt);
                 Cache::put('discovery:status:'.$id, ['checked_at' => now()->toIso8601String(), 'offers' => count($rows), 'matches' => $matches, 'healthy' => true], now()->addDays(7));
                 $this->info($id.': '.count($rows).' offers, '.$matches.' matches');
             } catch (Throwable $e) {

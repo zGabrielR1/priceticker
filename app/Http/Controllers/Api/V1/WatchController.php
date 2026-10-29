@@ -27,7 +27,10 @@ class WatchController
             'config' => ['nullable', 'array'],
             'rules' => ['nullable', 'array'],
             'is_active' => ['sometimes', 'boolean'],
+            ...$this->discoveryRules(),
         ]);
+        // Nested validation must not discard existing type-specific JSON fields.
+        $data = array_replace($data, $request->only(['config', 'rules']));
 
         $watch = Watch::create(array_merge($data, [
             'user_id' => $request->user()->id,
@@ -53,7 +56,10 @@ class WatchController
             'config' => ['nullable', 'array'],
             'rules' => ['nullable', 'array'],
             'is_active' => ['sometimes', 'boolean'],
+            ...$this->discoveryRules(),
         ]);
+        // Nested validation must not discard existing type-specific JSON fields.
+        $data = array_replace($data, $request->only(['config', 'rules']));
 
         $watch->update($data);
 
@@ -66,6 +72,24 @@ class WatchController
         $watch->delete();
 
         return response()->json(['message' => 'Deleted'], 204);
+    }
+
+    private function discoveryRules(): array
+    {
+        return [
+            'config.keywords' => ['sometimes', 'array', 'max:20'],
+            'config.keywords.*' => ['required', 'string', 'max:120'],
+            'config.keyword_mode' => ['sometimes', 'in:any,all'],
+            'config.exclude_keywords' => ['sometimes', 'array', 'max:20'],
+            'config.exclude_keywords.*' => ['required', 'string', 'max:120'],
+            'rules.max_price' => ['sometimes', 'nullable', 'numeric', 'min:0.01', 'max:9999999999.99'],
+            'rules.min_pct_below_30d' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+            'rules.min_pct_below_90d' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+            'rules.record_low_only' => ['sometimes', 'boolean'],
+            'rules.store_allowlist' => ['sometimes', 'array', 'max:30'],
+            'rules.store_allowlist.*' => ['required', 'string', 'max:80'],
+            'rules.cooldown_minutes' => ['sometimes', 'integer', 'min:0', 'max:10080'],
+        ];
     }
 
     protected function authorize(Request $request, Watch $watch): void

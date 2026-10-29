@@ -7,6 +7,7 @@ use App\Models\Watch;
 use App\Services\Discovery\CatalogAdapter;
 use App\Services\Discovery\DealMatcher;
 use App\Services\Discovery\DiscoveryIngestor;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +30,7 @@ class DiscoveryTest extends TestCase
         (require database_path('migrations/2025_01_21_115343_create_notifications_table.php'))->up();
         (require database_path('migrations/2026_10_17_000000_create_watches_table.php'))->up();
         (require database_path('migrations/2026_10_28_000000_create_discovery_tables.php'))->up();
+        (require database_path('migrations/2026_10_28_010000_add_discovery_observation_watermark.php'))->up();
         DB::table('users')->insert([['id' => 1], ['id' => 2]]);
         config(['discovery.sources' => ['retailer' => ['origin' => 'https://store.example', 'driver' => 'json']]]);
     }
@@ -73,6 +75,82 @@ class DiscoveryTest extends TestCase
         $watch->update(['rules' => ['max_price' => 100]]);
         $this->travel(31)->minutes();
         $this->getJson('/api/v1/deals')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_old_and_replayed_observations_cannot_rewind_price_or_extend_expiry(): void
+    {
+        $this->watch();
+        $ingestor = app(DiscoveryIngestor::class);
+        $observed = CarbonImmutable::now()->subMinutes(2);
+        $ingestor->ingest('retailer', $this->rows(90), $observed);
+        $expiry = DB::table('discovery_matches')->value('expires_at');
+        $ingestor->ingest('retailer', $this->rows(50), $observed->subMinute());
+        $ingestor->ingest('retailer', $this->rows(90), $observed);
+        $this->assertEquals(90, DB::table('discovery_offers')->value('price'));
+        $this->assertSame($expiry, DB::table('discovery_matches')->value('expires_at'));
+        $this->assertSame(1, DB::table('notifications')->count());
+        $ingestor->ingest('retailer', $this->rows(95), $observed->addMinute());
+        $this->assertEquals(95, DB::table('discovery_offers')->value('price'));
+    }
+
+    public function test_stale_and_future_observations_are_rejected_before_persistence(): void
+    {
+        foreach ([CarbonImmutable::now()->subMinutes(31), CarbonImmutable::now()->addMinutes(2)] as $observed) {
+            try {
+                app(DiscoveryIngestor::class)->ingest('retailer', $this->rows(), $observed);
+                $this->fail('Invalid observation time accepted');
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                $this->assertArrayHasKey('observed_at', $e->errors());
+            }
+        }
+        $this->assertSame(0, DB::table('discovery_offers')->count());
+    }
+
+    public function test_keyword_modes_exclusions_and_preferred_stores(): void
+    {
+        $watch = $this->watch();
+        $watch->config = ['keywords' => ['RTX', 'graphics'], 'keyword_mode' => 'all', 'exclude_keywords' => ['used']];
+        $matcher = app(DealMatcher::class);
+        $row = $this->rows()[0];
+        $this->assertNotNull($matcher->reason($watch, $row, [], 'retailer'));
+        $row['title'] = 'RTX used graphics card';
+        $this->assertNull($matcher->reason($watch, $row, [], 'retailer'));
+        $row['title'] = 'RTX card';
+        $this->assertNull($matcher->reason($watch, $row, [], 'retailer'));
+        $watch->config = ['keywords' => ['RTX', 'graphics'], 'keyword_mode' => 'any'];
+        $this->assertNotNull($matcher->reason($watch, $row, [], 'retailer'));
+        $watch->rules = ['max_price' => 100, 'store_allowlist' => ['another-retailer']];
+        $this->assertNull($matcher->reason($watch, $row, [], 'retailer'));
+    }
+
+    public function test_watch_api_validates_discovery_controls(): void
+    {
+        Sanctum::actingAs(User::findOrFail(1), ['watches:write']);
+        $this->postJson('/api/v1/watches', [
+            'type' => 'product', 'name' => 'GPU',
+            'config' => ['keywords' => [123], 'keyword_mode' => 'unknown'],
+            'rules' => ['max_price' => -1, 'min_pct_below_30d' => 110, 'cooldown_minutes' => -1],
+        ])->assertUnprocessable()->assertJsonValidationErrors([
+            'config.keywords.0', 'config.keyword_mode', 'rules.max_price', 'rules.min_pct_below_30d', 'rules.cooldown_minutes',
+        ]);
+        $this->postJson('/api/v1/watches', [
+            'type' => 'product', 'name' => 'GPU',
+            'config' => ['keywords' => ['RTX'], 'keyword_mode' => 'all', 'exclude_keywords' => ['used'], 'urls' => ['https://store.example/rtx/p']],
+            'rules' => ['max_price' => 100, 'store_allowlist' => ['retailer']],
+        ])->assertCreated()->assertJsonPath('data.config.keyword_mode', 'all')->assertJsonPath('data.config.urls.0', 'https://store.example/rtx/p');
+    }
+
+    public function test_late_observation_uses_its_original_day_and_expiry(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-28 00:05:00'));
+        $this->watch();
+        $observed = CarbonImmutable::parse('2026-10-27 23:55:00');
+        app(DiscoveryIngestor::class)->ingest('retailer', $this->rows(), $observed);
+        $this->assertSame('2026-10-27', DB::table('discovery_samples')->value('day'));
+        $expiry = CarbonImmutable::parse(DB::table('discovery_matches')->value('expires_at'));
+        $this->assertSame('2026-10-28 00:25:00', $expiry->format('Y-m-d H:i:s'));
+        $data = json_decode(DB::table('notifications')->value('data'), true);
+        $this->assertSame($observed->toIso8601String(), $data['observed_at']);
     }
 
     public function test_inbox_batches_history_queries_instead_of_querying_every_card(): void
@@ -121,7 +199,7 @@ class DiscoveryTest extends TestCase
     public function test_webhook_authentication_replay_window_and_source_binding(): void
     {
         config(['discovery.webhook_secret' => 'test-secret']);
-        $body = json_encode(['offers' => [['sku' => 'sku', 'title' => 'RTX', 'path' => '/rtx/p', 'price' => 90, 'available' => true]]]);
+        $body = json_encode(['observed_at' => now()->toIso8601String(), 'offers' => [['sku' => 'sku', 'title' => 'RTX', 'path' => '/rtx/p', 'price' => 90, 'available' => true]]]);
         $send = function (int $timestamp, string $signedSource = 'retailer') use ($body) {
             return $this->call('POST', '/api/v1/discovery/retailer/events', [], [], [], [
                 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',

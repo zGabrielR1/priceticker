@@ -13,8 +13,19 @@ class DealMatcher
         }
         // A name alone is not an unrestricted watch. Explicit keywords are required.
         $keywords = array_filter((array) $watch->configValue('keywords', []), 'is_string');
-        if (! $keywords || ! collect($keywords)->contains(fn ($word) => trim($word) !== '' && mb_stripos($offer['title'], trim($word)) !== false)) {
+        $keywords = array_values(array_filter(array_map('trim', $keywords), fn ($word) => $word !== ''));
+        if (! $keywords) {
             return null;
+        }
+        $matches = array_map(fn ($word) => mb_stripos($offer['title'], $word) !== false, $keywords);
+        $all = $watch->configValue('keyword_mode', 'any') === 'all';
+        if ($all ? in_array(false, $matches, true) : ! in_array(true, $matches, true)) {
+            return null;
+        }
+        foreach ((array) $watch->configValue('exclude_keywords', []) as $word) {
+            if (is_string($word) && trim($word) !== '' && mb_stripos($offer['title'], trim($word)) !== false) {
+                return null;
+            }
         }
         if ($watch->storeAllowlist() && ! in_array($source, $watch->storeAllowlist(), true)) {
             return null;

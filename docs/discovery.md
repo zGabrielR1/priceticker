@@ -127,7 +127,7 @@ All queue/cache/database infrastructure remains the existing Laravel setup.
 POST `/api/v1/discovery/my-automation/events` with JSON:
 
 ```json
-{"offers":[{"sku":"product123:seller1","title":"RTX 5070 12GB","path":"/rtx-5070/p","price":2499.90,"available":true}]}
+{"observed_at":"2026-10-28T14:00:00-03:00","offers":[{"sku":"product123:seller1","title":"RTX 5070 12GB","path":"/rtx-5070/p","price":2499.90,"available":true}]}
 ```
 
 Prices are BRL for one SKU/seller and one payment basis. Keep seller/payment basis
@@ -143,7 +143,10 @@ Set a strong DISCOVERY_WEBHOOK_SECRET. Sign the **exact** raw JSON body:
 
 ```python
 import hashlib, hmac, json, time, urllib.request
-body = json.dumps({"offers": offers}, separators=(",", ":")).encode()
+from datetime import datetime, timezone
+# Capture this at collection time; retain it unchanged on delivery retries.
+observed_at = datetime.now(timezone.utc).isoformat()
+body = json.dumps({"observed_at": observed_at, "offers": offers}, separators=(",", ":")).encode()
 source = "my-automation"
 timestamp = str(int(time.time()))
 signature = hmac.new(secret.encode(), timestamp.encode() + b"." + source.encode() + b"." + body, hashlib.sha256).hexdigest()
@@ -157,18 +160,29 @@ with urllib.request.urlopen(request, timeout=30) as response:
 
 Only trusted producers receive the shared secret. It authorizes all configured
 sources. Signatures bind the source and expire after five minutes. Exact retries
-upsert the same SKU/day/watch records rather than creating duplicates. They do
-not provide a durable exactly-once queue or detect out-of-order producer events.
-The producer must serialize current observations, retry failed submissions and
+upsert the same SKU/day/watch records rather than creating duplicates. Older observations and exact timestamp retries are ignored per source/SKU.
+They cannot overwrite a newer price, append a daily sample or extend expiry.
+`observed_at` is required for push events and must be an ISO 8601 timestamp with
+an explicit timezone, optionally with up to six fractional second digits. It
+must be no more than 30 minutes old or 30 seconds ahead. A producer must use
+strictly increasing observation times for successive snapshots; conflicting
+values with the same timestamp do not override the first one. Expiry is measured
+from collection time, not delivery time. This does not provide a durable
+exactly-once queue. The producer must retry failed submissions and
 retain its own delivery cursor. Payloads are ingested synchronously in per-offer
 transactions. A failed batch may be partially committed; retry the whole batch.
+For a VTEX push source, wrap the native product array as
+`{"observed_at":"...","products":[...]}`; polling still accepts the native array.
 A producer must report unavailable offers explicitly; an omitted offer ages out
 of the inbox after 30 minutes. Never keep replaying an old catalog as fresh.
 
 ## Matching and retention
 
-Watches need explicit `config.keywords` (case-insensitive OR), optional
+Watches need explicit `config.keywords` (case-insensitive OR by default), optional
 `rules.store_allowlist`, and either `rules.max_price` or a historical drop rule.
+`config.keyword_mode=all` requires every keyword; `config.exclude_keywords`
+rejects a title containing any excluded term. Both modes compare title substrings.
+The Android form exposes these controls and preferred stores.
 Names alone do not match the catalog. Android's new form creates these values.
 A target-only watch works immediately. `min_pct_below_30d` needs at least seven
 separate prior days and compares against the median of observed daily samples
