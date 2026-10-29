@@ -24,12 +24,20 @@ class DiscoveryController
             ->select('offers.*', 'matches.reason', 'matches.watch_id', 'matches.expires_at', 'watches.name as watch_name')->get();
         // Re-evaluate current rules so edits cannot leave obsolete matches visible.
         $watches = Watch::where('user_id', $request->user()->id)->get()->keyBy('id');
-        $rows = $rows->filter(function ($row) use ($watches) {
-            $history = DB::table('discovery_samples')->where('offer_id', $row->id)
-                ->where('day', '>=', now()->subDays(30)->toDateString())->where('day', '<', now()->toDateString())
-                ->pluck('price')->map(fn ($p) => (float) $p)->all();
+        // Fetch histories once for the whole inbox, even when an offer matches
+        // several watches. Mobile refreshes must not issue one query per card.
+        $histories = DB::table('discovery_samples')->whereIn('offer_id', $rows->pluck('id')->unique())
+            ->where('day', '>=', now()->subDays(30)->toDateString())
+            ->where('day', '<', now()->toDateString())->get()->groupBy('offer_id');
+        $rows = $rows->filter(function ($row) use ($watches, $histories) {
+            $history = $histories->get($row->id, collect())->pluck('price')->map(fn ($p) => (float) $p)->all();
+            $reason = app(DealMatcher::class)->reason($watches[$row->watch_id], (array) $row, $history, $row->source);
+            if ($reason === null) {
+                return false;
+            }
+            $row->reason = $reason;
 
-            return app(DealMatcher::class)->reason($watches[$row->watch_id], (array) $row, $history, $row->source) !== null;
+            return true;
         })->values();
 
         $rows->each(function ($row) {

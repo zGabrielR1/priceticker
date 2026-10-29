@@ -27,3 +27,9 @@ Release checks:
 Next: integrate discovery ingestion with persisted watch matches and alerts;
 verify scheduled store checks on real Brazilian retailer pages.
 Reference: RECON.md, RUNBOOK.md, PROGRESS.md.
+
+Session direction (2026-10-28): keep improving and checking locally. User will
+manually deploy later. Do not attempt network deployment or request integrations;
+provide the exact manual deployment/build commands when the user says the
+session is finished. Keep hosting free, best-effort. Discovery validation and
+remaining runtime checks: docs/discovery-validation.md.

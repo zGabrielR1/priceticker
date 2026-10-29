@@ -16,6 +16,14 @@ class WatchRepository {
     return Watch.fromJson(res['data'] as Map<String, dynamic>);
   }
 
+  Future<Watch> setActive(int id, bool active) async {
+    final res = await _api.put(
+      '/api/v1/watches/$id',
+      body: {'is_active': active},
+    );
+    return Watch.fromJson(res['data'] as Map<String, dynamic>);
+  }
+
   Future<void> delete(int id) async {
     await _api.delete('/api/v1/watches/$id');
   }

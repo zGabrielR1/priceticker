@@ -9,7 +9,14 @@ class CatalogAdapter
 {
     public function normalize(array $source, array $payload): array
     {
-        if (($source['driver'] ?? '') === 'vtex') {
+        $driver = $source['driver'] ?? '';
+        if (! in_array($driver, ['vtex', 'json'], true)) {
+            throw new InvalidArgumentException('Unknown discovery source driver.');
+        }
+        if ($driver === 'vtex') {
+            if (! array_is_list($payload)) {
+                throw new InvalidArgumentException('Expected a VTEX catalog array.');
+            }
             $rows = [];
             foreach ($payload as $product) {
                 foreach ($product['items'] ?? [] as $sku) {
@@ -27,7 +34,7 @@ class CatalogAdapter
                 }
             }
         } else {
-            $rows = $payload['offers'] ?? [];
+            $rows = $payload['offers'] ?? null;
         }
         Validator::make(['offers' => $rows], [
             'offers' => ['present', 'array', 'max:500'],

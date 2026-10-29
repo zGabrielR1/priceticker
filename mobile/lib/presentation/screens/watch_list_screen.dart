@@ -37,22 +37,91 @@ class _WatchListScreenState extends State<WatchListScreen> {
           ),
         ],
       ),
-      body: wp.loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: wp.watches.length,
-              itemBuilder: (ctx, i) {
-                final w = wp.watches[i];
-                return ListTile(
-                  title: Text(w.name),
-                  subtitle: Text(w.type),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () => wp.remove(w.id),
-                  ),
-                );
-              },
-            ),
+      body: RefreshIndicator(
+        onRefresh: wp.load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (wp.loading) const LinearProgressIndicator(),
+            if (wp.error != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(wp.error!),
+                ),
+              ),
+            if (!wp.loading && wp.error == null && wp.watches.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'No watches yet. Add keywords and a target price to start your radar.',
+                ),
+              ),
+            for (final w in wp.watches)
+              Card(
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      title: Text(w.name),
+                      subtitle: Text(
+                        '${w.isActive ? 'Watching' : 'Paused'} · ${w.type}',
+                      ),
+                      value: w.isActive,
+                      onChanged: wp.busy.contains(w.id)
+                          ? null
+                          : (active) => wp.setActive(w, active),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          (w.config['keywords'] as List<dynamic>? ?? []).join(
+                            ', ',
+                          ),
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Delete'),
+                        onPressed: wp.busy.contains(w.id)
+                            ? null
+                            : () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Delete watch?'),
+                                    content: Text(
+                                      'Remove "${w.name}" and its deal matches?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true) await wp.remove(w.id);
+                              },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/watches/create'),
         child: const Icon(Icons.add),

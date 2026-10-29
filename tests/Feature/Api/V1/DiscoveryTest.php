@@ -75,6 +75,25 @@ class DiscoveryTest extends TestCase
         $this->getJson('/api/v1/deals')->assertOk()->assertJsonCount(0, 'data');
     }
 
+    public function test_inbox_batches_history_queries_instead_of_querying_every_card(): void
+    {
+        $this->watch();
+        $rows = [];
+        for ($i = 0; $i < 20; $i++) {
+            $row = $this->rows()[0];
+            $row['sku'] = 'sku-'.$i;
+            $rows[] = $row;
+        }
+        app(DiscoveryIngestor::class)->ingest('retailer', $rows);
+        Sanctum::actingAs(User::findOrFail(1), ['watches:read']);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->getJson('/api/v1/deals')->assertOk()->assertJsonCount(20, 'data');
+        $queries = collect(DB::getQueryLog())->filter(fn ($query) => str_contains($query['query'], 'discovery_samples'));
+        DB::disableQueryLog();
+        $this->assertCount(1, $queries);
+    }
+
     public function test_further_drops_alert_only_after_watch_cooldown(): void
     {
         $this->watch();
@@ -134,6 +153,20 @@ class DiscoveryTest extends TestCase
         $this->watch();
         app(DiscoveryIngestor::class)->ingest('retailer', [$rows[1]]);
         $this->assertSame(0, DB::table('discovery_samples')->count());
+    }
+
+    public function test_missing_feed_envelope_does_not_count_as_a_successful_empty_catalog(): void
+    {
+        config(['discovery.sources.retailer.endpoint' => 'https://store.example/catalog']);
+        Http::fake(['*' => Http::response(['error' => 'upstream failure'], 200)]);
+        $this->artisan('discovery:poll')->assertFailed();
+        $this->assertFalse(Cache::get('discovery:status:retailer')['healthy']);
+        $this->assertSame(0, DB::table('discovery_offers')->count());
+    }
+
+    public function test_explicit_empty_catalog_is_accepted(): void
+    {
+        $this->assertSame([], app(CatalogAdapter::class)->normalize(config('discovery.sources.retailer'), ['offers' => []]));
     }
 
     public function test_catalog_rejects_redirects_query_strings_and_traversal(): void
