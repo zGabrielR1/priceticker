@@ -6,18 +6,36 @@ import json
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import quote
 
+# Each candidate carries its own bounded search term so the probe is not tied to
+# one product category. The slice stays 10 products; a term is what makes the
+# slice representative of that retailer. Verified live 2026-11-02.
 CANDIDATES = {
-    "carrefour-gpu": ("Carrefour", "https://www.carrefour.com.br"),
-    "ibyte-gpu": ("Ibyte", "https://www.ibyte.com.br"),
-    "fastshop-gpu": ("Fast Shop", "https://www.fastshop.com.br"),
-    "nagem-gpu": ("Nagem", "https://www.nagem.com.br"),
+    "ibyte-gpu": ("Ibyte", "https://www.ibyte.com.br", "placa de video"),
+    "hering-apparel": ("Hering", "https://www.hering.com.br", "camisa"),
+    "olympikus-footwear": ("Olympikus", "https://www.olympikus.com.br", "tenis"),
+    "farm-apparel": ("Farm", "https://www.farmrio.com.br", "vestido"),
+    "puket-hosiery": ("Puket", "https://www.puket.com.br", "meia"),
+    "karsten-home": ("Karsten", "https://www.karsten.com.br", "toalha"),
+    "multilaser-electronics": ("Multilaser", "https://www.multilaser.com.br", "fone"),
+    "carrefour-gpu": ("Carrefour", "https://www.carrefour.com.br", "placa de video"),
+    "fastshop-gpu": ("Fast Shop", "https://www.fastshop.com.br", "placa de video"),
+    "nagem-gpu": ("Nagem", "https://www.nagem.com.br", "placa de video"),
+    "drogasil-pharmacy": ("Drogasil", "https://www.drogasil.com.br", "vitamina"),
+    "centauro-sports": ("Centauro", "https://www.centauro.com.br", "tenis"),
 }
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
+
+
+def build_endpoint(origin: str, term: str) -> str:
+    """Bounded first-page VTEX catalog search for the term (never full catalog)."""
+    return (origin + "/api/catalog_system/pub/products/search"
+            + f"?ft={quote(term)}&_from=0&_to=9")
 
 
 def verify(payload: object) -> int:
@@ -51,8 +69,8 @@ def main() -> int:
     opener = urllib.request.build_opener(NoRedirect())
     verified = {}
     results = []
-    for source, (name, origin) in CANDIDATES.items():
-        endpoint = origin + "/api/catalog_system/pub/products/search?ft=placa%20de%20video&_from=0&_to=9"
+    for source, (name, origin, term) in CANDIDATES.items():
+        endpoint = build_endpoint(origin, term)
         result = {"id": source, "endpoint": endpoint, "verified": False}
         try:
             request = urllib.request.Request(endpoint, headers={

@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Models\Device;
 use App\Models\User;
 use App\Models\Watch;
+use App\Notifications\DiscoveryDealNotification;
 use App\Services\Discovery\CatalogAdapter;
 use App\Services\Discovery\DealMatcher;
 use App\Services\Discovery\DiscoveryIngestor;
+use App\Services\FcmService;
+use App\Services\Helpers\SettingsHelper;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
@@ -306,5 +310,50 @@ class DiscoveryTest extends TestCase
         $this->assertFalse(Cache::get('discovery:status:retailer')['healthy']);
         $this->artisan('discovery:poll')->assertSuccessful();
         Http::assertSentCount(1);
+    }
+
+    public function test_polling_identifies_the_app_user_agent(): void
+    {
+        // Retail WAFs (verified against ibyte.com.br) reject Guzzle's default agent with 403.
+        config(['discovery.sources.retailer.endpoint' => 'https://store.example/catalog']);
+        Http::fake(['*' => Http::response(['offers' => []])]);
+        $this->artisan('discovery:poll')->assertSuccessful();
+        Http::assertSent(fn ($request) => $request->hasHeader('User-Agent', config('app.name').'/'.config('app.version', 'dev')));
+    }
+
+    public function test_discovery_alert_is_database_only_when_fcm_is_disabled(): void
+    {
+        SettingsHelper::$settings = null; // App-level fcm service not enabled.
+        $notification = new DiscoveryDealNotification(['title' => 'RTX', 'price' => 90, 'url' => 'https://store.example/rtx/p'], 'Within your target', 1);
+        $this->assertSame(['database'], $notification->via(User::findOrFail(1)));
+    }
+
+    public function test_discovery_alert_pushes_to_fcm_when_the_service_is_enabled(): void
+    {
+        (require database_path('migrations/2026_10_18_000000_create_devices_table.php'))->up();
+        Device::create(['user_id' => 1, 'fcm_token' => 'tok-1', 'platform' => 'android', 'device_id' => 'dev-1']);
+        SettingsHelper::$settings = ['notification_services' => ['fcm' => ['enabled' => true]]];
+
+        $sent = [];
+        $this->app->instance(FcmService::class, new FcmService('server-key', 'https://fcm.invalid', function ($endpoint, $payload, $key) use (&$sent) {
+            $sent[] = $payload;
+
+            return ['success' => true];
+        }));
+
+        try {
+            $this->watch();
+            $this->assertSame(1, app(DiscoveryIngestor::class)->ingest('retailer', $this->rows()));
+
+            $this->assertCount(1, $sent, 'a single push should be delivered to the registered device');
+            $this->assertSame('tok-1', $sent[0]['to']);
+            $this->assertStringStartsWith('Deal found:', $sent[0]['notification']['title']);
+            $this->assertSame('https://store.example/rtx/p', $sent[0]['data']['url']);
+            $this->assertSame('1', (string) $sent[0]['data']['watch_id']);
+            // The database inbox is still written alongside the push.
+            $this->assertSame(1, DB::table('notifications')->count());
+        } finally {
+            SettingsHelper::$settings = null;
+        }
     }
 }

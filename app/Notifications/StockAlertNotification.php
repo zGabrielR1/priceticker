@@ -39,6 +39,23 @@ class StockAlertNotification extends Notification
             ->toArray();
     }
 
+    public function toFcm(User $notifiable): array
+    {
+        // FCM data values must be strings; keys let the mobile client deep-link.
+        return [
+            'title' => $this->getTitle(),
+            'body' => $this->getSummary(),
+            'data' => [
+                'type' => 'back_in_stock',
+                'url' => (string) $this->getUrl(),
+                'buy_url' => (string) $this->url->buy_url,
+                'url_id' => (string) $this->url->id,
+                'product_id' => (string) ($this->product->id ?? ''),
+                'store_name' => (string) $this->url->store_name,
+            ],
+        ];
+    }
+
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)

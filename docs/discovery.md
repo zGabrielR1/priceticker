@@ -105,6 +105,58 @@ Replace placeholders with a retailer you have verified. Separate each retailer
 into its own source. A JSON source can also have a polling endpoint returning the
 normalized payload below. No endpoint means push-only. Source IDs are the values
 used by `rules.store_allowlist`, not a retailer display name or affiliate domain.
+
+`python scripts/probe_discovery_sources.py` re-checks each candidate's bounded,
+per-category slice (a fixed 10-product page; the search term is per-candidate)
+behind a no-redirect, 5 MB-capped fetch and writes `source-probe/verified-sources.json`.
+Every verified snapshot must then clear `php scripts/verify_snapshots_via_php_adapter.php`,
+which runs it through the real `CatalogAdapter` (path regex, `..`/`%`/`//` rejections,
+origin contract, positive-price-for-available rule) — passing the shape check
+alone is not sufficient. Live 2026-11-02 (network-enabled machine, using the
+app's own `User-Agent`):
+
+| Candidate | Category | Outcome |
+| --- | --- | --- |
+| Ibyte `https://www.ibyte.com.br` | Electronics (GPUs) | **Verified** — 10/10 in-stock priced VTEX offers; `CatalogAdapter` 10 rows |
+| Multilaser `https://www.multilaser.com.br` | Electronics (audio) | **Verified** — 10/10 in-stock priced offers; `CatalogAdapter` 10 rows |
+| Hering `https://www.hering.com.br` | Apparel (menswear basics) | **Verified** — 46 in-stock priced offers; `CatalogAdapter` 54 rows |
+| Farm `https://www.farmrio.com.br` | Apparel (women/beachwear) | **Verified** — 11 in-stock priced offers; `CatalogAdapter` 58 rows |
+| Puket `https://www.puket.com.br` | Apparel (socks/hosiery) | **Verified** — 25 in-stock priced offers; `CatalogAdapter` 33 rows |
+| Olympikus `https://www.olympikus.com.br` | Footwear (sneakers) | **Verified** — 96 in-stock priced offers; `CatalogAdapter` 110 rows |
+| Karsten `https://www.karsten.com.br` | Home (bath/textiles) | **Verified** — 10/10 in-stock priced offers; `CatalogAdapter` 10 rows |
+| Carrefour | Electronics | Blocked — HTTP 403 even with the product agent; not enabled |
+| Fast Shop | Electronics | HTTP 503 at time of probe; unproven |
+| Nagem | Electronics | HTTP 404 — does not expose this public catalog route |
+| Drogasil | Pharmacy | Blocked — HTTP 403; pharmacy category not enabled by this build |
+| Centauro | Sports | Blocked — HTTP 403; sports footwear covered via Olympikus instead |
+| Havaianas / Arezzo / Tok&Stok / Cacau Show | (various) | HTTP 404 on the standard VTEX route; hostname not published as a bounded public catalog search |
+| Azaleia | Footwear | Route returns HTML (Oracle CC storefront), not VTEX JSON; skipped |
+
+Live end-to-end poll on 2026-11-02 against the expanded list: `php artisan
+discovery:poll` fetched all seven sources concurrently and reported
+`ibyte-gpu 10, hering-apparel 54, olympikus-footwear 110, farm-apparel 58,
+puket-hosiery 33, karsten-home 10, multilaser-electronics 10` — 285 rows total,
+every one normalized by the real PHP `CatalogAdapter` before write. This proves
+the discovery pipeline is genuinely multi-retailer across electronics, apparel,
+hosiery, footwear and home categories, not just the single-source demo from
+earlier on 2026-11-02.
+
+Verified retailers span categories; enabling one for a GPU radar is an operator
+choice, not automatic. Several large BR retailers deliberately return 403 to any
+automated catalog fetch — those stay disabled, which is the intended behaviour.
+
+`scripts/test_live_catalog_contract.py` pins the captured Ibyte snapshot against
+a Python port of `CatalogAdapter`'s normalization/validation rules, so a response
+shape drift is caught without PHP. Passing the probe is necessary, not sufficient:
+set `DISCOVERY_SOURCES` from the verified JSON, migrate, and watch one poll cycle
+before trusting the inbox.
+
+The poller identifies itself with `User-Agent: <APP_NAME>/<APP_VERSION>`. A live
+2026-11-02 check confirmed Ibyte serves the catalog to that agent but returns
+HTTP 403 to Guzzle's default `GuzzleHttp/...` agent, so the header is required,
+not cosmetic; the probe sends the same style of agent. This is best-effort
+etiquette toward the retailer, not a way to defeat a block that is deliberately
+enforced (Carrefour 403s the probe's own agent too and stays disabled).
 A failed source is isolated and backs off from 120 seconds to at most an hour.
 Each run fetches at most one response per configured source, with a 20-second
 timeout, a post-download 5 MB limit and at most 500 normalized offers. It refuses
@@ -207,8 +259,21 @@ matches. GET `/api/v1/discovery/sources` returns public source names/origins and
 health, never endpoint secrets. The current mobile inbox is discovery polling;
 new matches and further price drops create database alert notifications, subject
 to the watch cooldown and its app channel setting. Same-price refreshes do not send duplicate alerts.
-A price drop suppressed during cooldown is not queued for later replay. FCM push
-delivery is not wired into this discovery feature.
+A price drop suppressed during cooldown is not queued for later replay. Delivery
+is two-layered and opt-in: the watch's `app` channel decides whether the match
+alerts at all (database inbox), and FCM push is added only when the app-level
+`fcm` notification service is enabled in Settings. The database inbox is written
+either way. When enabled, the alert is pushed to the user's registered devices
+(`/api/v1/devices`) with `data` keys mirroring the inbox (`type`, `watch_id`,
+`url`, `observed_at`). With no FCM server key configured the send is a safe
+no-op, so hosting stays free/best-effort until a host opts in.
+The legacy alert flow now shares this FCM path: `PriceAlertNotification` and
+`StockAlertNotification` each expose a `toFcm()` with the same string-typed
+`data` shape (`type` `price_drop`/`back_in_stock`, plus `url`, `buy_url`,
+`url_id`, `product_id`, `store_name` and `price` for drops). They push only when
+the `fcm` service is enabled and the user has registered devices; otherwise the
+database/mail/other channels are unaffected, so FCM is complete across discovery,
+price-drop and back-in-stock alerts without changing existing behavior.
 The app refreshes every minute while foregrounded and supports manual refresh.
 The existing alert inbox remains separate. Shipping is unknown until checkout.
 

@@ -89,3 +89,33 @@ Inbox completeness: the 100-card display limit now applies after current watch
 rules are checked. Candidates and histories are read in batches; outdated
 matches no longer hide valid offers beyond the first batch. A 101-offer regression
 passes, along with the discovery suite and targeted PHP static checks.
+
+Live source verification (2026-11-02, network-enabled machine):
+- `scripts/probe_discovery_sources.py` ran against the real candidates. Ibyte
+  returned 10 bounded VTEX offers, all in stock and priced, and is the first
+  source that can be configured for real polling. Carrefour is bot-blocked (403),
+  Fast Shop returned 503 and Nagem has no public catalog route (404); none are
+  enabled.
+- Added `scripts/test_live_catalog_contract.py` plus a trimmed live Ibyte
+  snapshot fixture. It ports `CatalogAdapter`'s normalization/path/price rules
+  to Python (no PHP runtime exists on this machine) and pins the agreement
+  between the probe gate and the receiver contract, including the deliberate
+  stricter activation gate on SKU/seller identity.
+- Scripts suite now 14 tests, all pass; deal-engine suite still 21 pass.
+
+Live PHP run (2026-11-02b, winget PHP 8.4.27 now installed on this box):
+- Configured the verified Ibyte source and a GPU watch, then ran the real poller
+  against the live catalog: `discovery:poll --force` → 10 offers, 5 watch matches.
+- The match → **alert** integration is proven end-to-end: a
+  `App\Notifications\DiscoveryDealNotification` row persisted with a pt-BR/BRL
+  body ("R$ 479,90 · Within your target") and the watch's `last_alerted_at`
+  watermark was set. One alert for five simultaneous matches is the intended
+  per-watch cooldown, not a loss of matches.
+- Authenticated `GET /api/v1/deals` (temporary token, revoked after) returned
+  exactly those 5 deals from source `ibyte-gpu`.
+- Fix found only by running it live: the retailer WAF 403s Guzzle's default
+  `User-Agent`. `discovery:poll` now sends `User-Agent: <APP_NAME>/<APP_VERSION>`
+  (regression test added). Discovery suite 20 passed; Pint 549 files clean;
+  PHPStan level 5 clean.
+- Still pending (deployment, user-performed): set DISCOVERY_SOURCES + deploy;
+  scheduled `discovery:poll` against production and FCM push remain out of scope.

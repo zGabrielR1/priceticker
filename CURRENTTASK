@@ -26,6 +26,50 @@ Release checks:
 
 Next: integrate discovery ingestion with persisted watch matches and alerts;
 verify scheduled store checks on real Brazilian retailer pages.
+Done 2026-11-02 (retailers-expanded): discovery source coverage grew 3 to 7
+live Brazilian retailers spanning 5 categories (electronics, apparel, hosiery,
+footwear, home). Added Farm, Puket, Karsten, Multilaser as verified VTEX
+sources via scripts/probe_discovery_sources.py; each snapshot now passes
+scripts/verify_snapshots_via_php_adapter.php (a new permanent gate that pipes
+each captured payload through the real PHP CatalogAdapter rules) — 285 rows
+across 7 sources, zero rejections. Live `php artisan discovery:poll` end-to-end
+against all 7 confirmed ingestion counts match snapshot normalization. Documented
+403-blocked (Drogasil, Centauro, Artex, Panvel, Araujo) and 404/not-VTEX
+(Havaianas, Arezzo, Tok&Stok, Cacau, Azaleia) candidates so operators do not
+re-try them. No production PHP changed; broadening coverage is config+probe
+work. Next candidates: mobile deep-link routing that consumes the FCM data.url,
+or a per-category source registry surfaced through the Filament admin.
+Done 2026-11-02 (fcm-complete): FCM push extended to the legacy alert flow too.
+toFcm() added to PriceAlertNotification and StockAlertNotification (same
+string-typed data shape as discovery: type/url/buy_url/url_id/product_id/
+store_name, +price for drops); both already reach FcmChannel via
+getEnabledChannels(), so a push fires only when the fcm service is enabled and
+the user has devices — other channels unchanged. New FcmChannelTest + full
+Unit/Notifications directory 38 passed (96 assertions); Pint + PHPStan clean.
+FCM now covers discovery, price-drop and back-in-stock alerts app-wide.
+Done 2026-11-02 (alerts+push): discovery match alerts now reach FCM push too.
+Implemented toFcm() on DiscoveryDealNotification and gated via() to add the FCM
+channel only when the app-level fcm service is enabled (database inbox always
+written); layered on the existing per-watch 'app' channel gate. Discovery suite
+22 passed; FCM/mobile/alert regressions 17 passed; Pint + PHPStan clean. Free
+hosting unaffected (unconfigured FCM key = no-op).
+Done 2026-11-02: retailer endpoints probed live — probe now verifies a bounded
+PER-CATEGORY slice; three real Brazilian retailers verified as working bounded
+VTEX sources (source-probe/verified-sources.json): Ibyte (electronics), Hering
+(apparel), Olympikus (footwear); Hering/Olympikus payloads also normalized through
+the real PHP CatalogAdapter. Carrefour/Petlove/Zattini/Centauro/Netshoes 403
+(deliberately bot-blocked) and Nagem/Kalunga/Mobly 404, Fast Shop 503 — none
+enabled. Contract test scripts/test_live_catalog_contract.py pins the live
+snapshot against the CatalogAdapter rules.
+Done 2026-11-02 (toolchain): this Windows box now has a full local PHP 8.4.27
+stack (winget PHP + Composer phar + Node build) running the app on SQLite via
+artisan serve. Verified end-to-end against the REAL Ibyte catalog: 10 offers
+ingested, 5 matched to a watch, authenticated /api/v1/deals returned those 5,
+smoke token revoked. Fix found live: retail WAFs 403 Guzzle's default User-Agent,
+so discovery:poll now sends `User-Agent: <APP_NAME>/<APP_VERSION>` (regression
+test added). Discovery PHP suite 19→20 pass in isolation; Pint + PHPStan clean.
+Full PHP suite on SQLite: 1229 passed, 56 failed — the pre-existing broad-suite
+failures (MySQL baseline was 45/1189 per PROGRESS.md); classification pending.
 Reference: RECON.md, RUNBOOK.md, PROGRESS.md.
 
 Session direction (2026-10-28): keep improving and checking locally. User will

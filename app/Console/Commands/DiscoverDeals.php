@@ -30,7 +30,10 @@ class DiscoverDeals extends Command
             try {
                 // Endpoints are operator configuration. No redirects to affiliate/other hosts.
                 $observedAt = CarbonImmutable::now();
-                $response = Http::acceptJson()->timeout(20)->withoutRedirecting()->get($source['endpoint']);
+                $response = Http::withHeaders([
+                    // Many retail WAFs drop Guzzle's default agent; identify like the probe does.
+                    'User-Agent' => config('app.name', 'PriceTicker').'/'.config('app.version', 'dev'),
+                ])->acceptJson()->timeout(20)->withoutRedirecting()->get($source['endpoint']);
                 if (! $response->successful()) {
                     throw new \RuntimeException('Catalog HTTP '.$response->status());
                 }
