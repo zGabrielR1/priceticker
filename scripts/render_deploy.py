@@ -296,7 +296,7 @@ def entities(answer, *names: str) -> list[dict]:
 
 def cursor_of(answer) -> str:
     items = answer if isinstance(answer, list) else [answer]
-    for item in items:
+    for item in reversed(items):
         if isinstance(item, dict) and item.get("cursor"):
             return item["cursor"]
     return ""
@@ -338,19 +338,29 @@ def configure(service_id: str, key: str) -> dict:
 
 
 def get_env_vars(service_id: str, key: str) -> list[dict[str, str]]:
-    # The endpoint defaults to 20 rows; without limit=100 a merge would drop
-    # every dashboard variable past the first page.
-    answer = call(f"/services/{service_id}/env-vars?limit=100", key)
-    rows = answer.get("envVars") if isinstance(answer, dict) else answer
     out = []
-    for row in rows or []:
-        if not isinstance(row, dict):
-            continue
-        env = row.get("envVar") if isinstance(row.get("envVar"), dict) else row
-        name = str(env.get("key") or "").strip()
-        if name:
-            out.append({"key": name, "value": env.get("value", "")})
-    return out
+    cursor = ""
+    seen = set()
+    while True:
+        path = f"/services/{service_id}/env-vars?limit=100"
+        answer = call(path + (f"&cursor={cursor}" if cursor else ""), key)
+        rows = answer.get("envVars") if isinstance(answer, dict) else answer
+        if not isinstance(rows, list):
+            raise RenderError("unreadable environment response; refusing to replace secrets")
+        for row in rows:
+            if not isinstance(row, dict):
+                raise RenderError("unreadable environment row; refusing to replace secrets")
+            env = row.get("envVar") if isinstance(row.get("envVar"), dict) else row
+            name = str(env.get("key") or "").strip()
+            if not name or "value" not in env:
+                raise RenderError("incomplete environment row; refusing to replace secrets")
+            out.append({"key": name, "value": env["value"]})
+        cursor = cursor_of(rows)
+        if not cursor:
+            return out
+        if cursor in seen:
+            raise RenderError("repeated environment cursor; refusing to replace secrets")
+        seen.add(cursor)
 
 
 def set_env_vars(service_id: str, key: str, rows: list[dict[str, str]]) -> None:

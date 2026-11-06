@@ -8,6 +8,27 @@ import render_deploy as deploy
 
 
 class DeploymentTest(unittest.TestCase):
+    def test_environment_reads_every_page_using_last_cursor(self):
+        pages = [
+            [{"envVar": {"key": "A", "value": "1"}, "cursor": "first"},
+             {"envVar": {"key": "B", "value": "2"}, "cursor": "last"}],
+            [{"envVar": {"key": "C", "value": "3"}, "cursor": "next"}],
+            [],
+        ]
+        with patch.object(deploy, "call", side_effect=pages) as api:
+            self.assertEqual(deploy.get_env_vars("service", "key"),
+                             [{"key": "A", "value": "1"},
+                              {"key": "B", "value": "2"},
+                              {"key": "C", "value": "3"}])
+            self.assertTrue(api.call_args_list[1].args[0].endswith("cursor=last"))
+
+    def test_environment_rejects_malformed_or_repeating_pages(self):
+        for pages in [[{}], [[{"key": "SECRET"}]],
+                      [[{"envVar": {"key": "A", "value": "1"}, "cursor": "same"}]] * 2]:
+            with self.subTest(pages=pages), patch.object(deploy, "call", side_effect=pages):
+                with self.assertRaises(deploy.RenderError):
+                    deploy.get_env_vars("service", "key")
+
     def test_relocated_secrets_keep_application_key(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
