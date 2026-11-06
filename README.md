@@ -2,6 +2,8 @@
 
 **Track prices from the stores you actually use. Run it yourself. Keep the data. Know when a deal is real.**
 
+**Live interface:** https://priceticker.onrender.com
+
 PriceBuddy is an open source, self-hostable price tracker for people who would rather watch products than browser tabs. Paste in a product URL, let PriceBuddy check it on a schedule, and get notified when the price or availability moves in your favour.
 
 It works across different stores, keeps price history, compares listings, handles stock status, and can use your own AI provider when a page is awkward to scrape. The web app is the main control room; the browser extension brings it to the product page you are already on, and the API and CLI make it scriptable.
